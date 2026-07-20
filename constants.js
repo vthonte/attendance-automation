@@ -1,0 +1,14 @@
+import { config } from "./configLoader.js";
+export const attendanceUrl = config.attendanceUrl;
+export const CHECK_INTERVAL_MS = config.checkIntervalMs;
+export const MANUAL_ATTENTION_INTERVAL_MS = config.manualAttentionIntervalMs;
+export const DEBUG_HOST = config.debugHost;
+export const DEBUG_PORT = config.debugPort;
+export const CDP_CONNECT_TIMEOUT_MS = config.cdpConnectTimeoutMs;
+export const CLOCK_IN_CONTROL_TIMEOUT_MS = config.clockInControlTimeoutMs;
+export const CLOCK_OUT_CONTROL_TIMEOUT_MS = config.clockOutControlTimeoutMs;
+export const CHROME_PROFILE_DIRECTORY = config.chromeProfileDirectory;
+export const SHOW_TOAST_UI = config.showToastUi;
+export const SHOW_LOGGED_DATE = config.showLoggedDate;
+export const TOAST_HEIGHT = config.toastHeight;
+export const DISABLE_CHROME_BACKGROUND_SERVICES = config.disableChromeBackgroundServices;

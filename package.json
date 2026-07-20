@@ -1,0 +1,67 @@
+{
+  "name": "attendance",
+  "version": "1.0.0",
+  "main": "desktopMain.js",
+  "type": "module",
+  "scripts": {
+    "attendance": "node attendance.js",
+    "toast": "electron notifyToast.js",
+    "check": "node --check attendance.js && node --check desktopMain.js && node --check notifyToast.js && node --check platform.js && node --check store.js && node --check attendanceStore.js",
+    "dist:win": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable --publish never",
+    "release:portable": "electron-builder --win portable --publish never && powershell -NoProfile -ExecutionPolicy Bypass -File .\\copy-portable-assets.ps1",
+    "release:portable:zip": "npm run release:portable && powershell -NoProfile -ExecutionPolicy Bypass -File .\\package-portable-zip.ps1",
+    "dist:portable:fast": "electron-builder --win portable --publish never --config.compression=store",
+    "release:portable:fast:zip": "npm run dist:portable:fast && powershell -NoProfile -ExecutionPolicy Bypass -File .\\copy-portable-assets.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File .\\package-portable-zip.ps1",
+    "dist:dir": "electron-builder --win dir --publish never"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Cross-platform attendance automation with desktop status toast.",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "playwright": "^1.56.1"
+  },
+  "devDependencies": {
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12"
+  },
+  "overrides": {
+    "@noble/hashes": "1.8.0"
+  },
+  "build": {
+    "appId": "com.attendance.automation",
+    "productName": "Attendance Automation",
+    "asar": false,
+    "files": [
+      "attendance.js",
+      "attendanceStore.js",
+      "constants.js",
+      "configLoader.js",
+      "desktopMain.js",
+      "notifyToast.js",
+      "platform.js",
+      "store.js",
+      "toast.html",
+      "config.txt",
+      "uninstall.ps1",
+      "install-portable.ps1",
+      "package.json"
+    ],
+    "extraResources": [
+      "attendance_store.json",
+      "toast_status.txt"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

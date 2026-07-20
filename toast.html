@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Toast</title>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      #box {
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        border-top: 3px solid rgba(211, 211, 211, 0.55);
+        background: transparent;
+        font-family:
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+      }
+
+      #label {
+        position: fixed;
+        top: 5px;
+        right: 12px;
+        max-width: min(240px, calc(100vw - 24px));
+        box-sizing: border-box;
+        padding: 2px 8px 3px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(20, 24, 28, 0.58);
+        color: rgba(255, 255, 255, 0.86);
+        box-shadow: none;
+        font-size: 11px;
+        line-height: 16px;
+        letter-spacing: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0;
+        transition:
+          opacity 160ms ease,
+          background-color 160ms ease,
+          border-color 160ms ease,
+          box-shadow 160ms ease,
+          color 160ms ease;
+      }
+
+      #label.has-text {
+        opacity: 0;
+      }
+
+      #label.has-text:hover {
+        background: rgb(20, 24, 28);
+        color: rgb(255, 255, 255);
+        opacity: 1;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="box">
+      <div id="label"></div>
+    </div>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+      const box = document.getElementById("box");
+      const label = document.getElementById("label");
+      const barColors = {
+        khaki: "rgba(240, 230, 140, 0.55)",
+        lightgreen: "rgba(144, 238, 144, 0.55)",
+        lightcoral: "rgba(240, 128, 128, 0.72)",
+        lightgray: "rgba(211, 211, 211, 0.42)",
+      };
+
+      ipcRenderer.on("update-toast", (event, { text, color, visible = true }) => {
+        box.style.borderColor = barColors[color] || color;
+        box.style.display = visible ? "block" : "none";
+        label.textContent = text || "";
+        label.style.borderColor = color;
+        label.classList.toggle("has-text", Boolean(text));
+      });
+    </script>
+  </body>
+</html>
