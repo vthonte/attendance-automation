@@ -15,6 +15,9 @@ import {
   MANUAL_ATTENTION_INTERVAL_MS,
   CHROME_PROFILE_DIRECTORY,
   DISABLE_CHROME_BACKGROUND_SERVICES,
+  DISABLE_ALL_UI,
+  SHOW_LOGGED_DATE,
+  SHOW_TOAST_UI,
 } from "./constants.js";
 import { isLoggedToday, markLoggedToday } from "./attendanceStore.js";
 import {
@@ -220,6 +223,11 @@ async function gotoWithNetworkRetry(page, url, timeout = 180_000) {
 }
 
 function startToast() {
+  if (DISABLE_ALL_UI || (!SHOW_TOAST_UI && !SHOW_LOGGED_DATE)) {
+    log("Toast process disabled by config.txt");
+    return;
+  }
+
   if (!fs.existsSync(statusFile)) {
     setStatus("out");
     log(`Created toast status file: ${statusFile}`);
@@ -227,6 +235,7 @@ function startToast() {
 
   log(`Starting toast UI; status file: ${statusFile}`);
   const toast = spawnToast(BASE, statusFile);
+  if (!toast) return;
   toast.on("error", (err) => log(`Toast process failed to start: ${err.message}`));
   toast.on("exit", (code, signal) => {
     if (code !== 0 && code !== null) log(`Toast process exited: code=${code}`);

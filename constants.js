@@ -12,3 +12,4 @@ export const SHOW_TOAST_UI = config.showToastUi;
 export const SHOW_LOGGED_DATE = config.showLoggedDate;
 export const TOAST_HEIGHT = config.toastHeight;
 export const DISABLE_CHROME_BACKGROUND_SERVICES = config.disableChromeBackgroundServices;
+export const DISABLE_ALL_UI = config.disableAllUi;

@@ -82,9 +82,9 @@
         lightgray: "rgba(211, 211, 211, 0.42)",
       };
 
-      ipcRenderer.on("update-toast", (event, { text, color, visible = true }) => {
-        box.style.borderColor = barColors[color] || color;
-        box.style.display = visible ? "block" : "none";
+      ipcRenderer.on("update-toast", (event, { text, color, barVisible = true }) => {
+        box.style.borderColor = barVisible ? barColors[color] || color : "transparent";
+        box.style.display = "block";
         label.textContent = text || "";
         label.style.borderColor = color;
         label.classList.toggle("has-text", Boolean(text));

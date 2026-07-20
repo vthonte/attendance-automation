@@ -107,7 +107,7 @@ function updateToastFromFile() {
       win.webContents.send("update-toast", {
         text: config.showLoggedDate ? text : "",
         color,
-        visible: config.showToastUi,
+        barVisible: config.showToastUi,
       });
       log(`Updated toast: text='${text}', color='${color}'`);
     }

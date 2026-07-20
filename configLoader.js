@@ -34,4 +34,5 @@ export const config = {
   showLoggedDate: boolean("SHOW_LOGGED_DATE", true),
   toastHeight: number("TOAST_HEIGHT", 32),
   disableChromeBackgroundServices: boolean("DISABLE_CHROME_BACKGROUND_SERVICES", true),
+  disableAllUi: boolean("DISABLE_ALL_UI", false),
 };
