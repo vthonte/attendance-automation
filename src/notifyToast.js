@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const toastArgumentIndex = process.argv.indexOf("--toast");
-const dataDir = process.env.ATTENDANCE_DATA_DIR || __dirname;
+const dataDir = process.env.ATTENDANCE_DATA_DIR || path.join(path.dirname(__dirname), "data");
 const statusFile = (toastArgumentIndex >= 0 && process.argv[toastArgumentIndex + 1]) || process.argv[2] || path.join(dataDir, "toast_status.txt");
 const storeFile = path.join(dataDir, "attendance_store.json");
 const logFile = path.join(dataDir, "toast_log.txt");

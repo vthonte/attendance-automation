@@ -32,8 +32,7 @@ export function getToastCommand(base, statusFile) {
   return {
     command: electron,
     args: [
-      `--user-data-dir=${path.join(process.env.TEMP || base, "toast-electron")}`,
-      path.join(base, "notifyToast.js"),
+      path.join(base, "src", "notifyToast.js"),
       statusFile,
     ],
   };
@@ -46,7 +45,7 @@ export function runPlatformCommand(command) {
 export async function stopChromeForAttendance(profile) {
   if (process.platform === "win32") {
     const escaped = profile.replace(/'/g, "''");
-    await runPlatformCommand(`powershell -NoProfile -WindowStyle Hidden -Command "$profile='${escaped}'; Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe'\" | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`);
+    await runPlatformCommand(`powershell -NoProfile -WindowStyle Hidden -Command "$profile='${escaped}'; $owners=Get-NetTCPConnection -LocalPort 9222 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($ownerPid in $owners){ Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`);
   }
 }
 
@@ -58,7 +57,14 @@ export async function focusChrome() {
 export function spawnToast(base, statusFile) {
   const { command, args } = getToastCommand(base, statusFile);
   if (process.env.ATTENDANCE_PACKAGED === "1") args.unshift("--toast");
-  const toast = spawn(command, args, { cwd: base, detached: true, stdio: "ignore", windowsHide: true });
+  const { ELECTRON_RUN_AS_NODE, ...toastEnvironment } = process.env;
+  const toast = spawn(command, args, {
+    cwd: base,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env: toastEnvironment,
+  });
   toast.unref();
   return toast;
 }

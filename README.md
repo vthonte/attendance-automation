@@ -14,11 +14,11 @@ Automatically checks the Keka attendance page, clocks in when needed, and shows 
 Open PowerShell in this folder and run:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\setup.ps1
+npm install
+npm run check
 ```
 
-The setup script installs npm dependencies, creates missing state files, validates the project, and creates an `Attendance Automation` shortcut in the current user's Startup folder.
+Run `setup.ps1` once. It installs dependencies, creates missing data files, validates the project, and adds `run_hidden.vbs` to the current user's Startup folder according to `data\config.txt`.
 
 After setup, test the launcher once:
 
@@ -47,7 +47,7 @@ The top bar indicates:
 - Gray: attendance is not logged.
 - Red: manual attention is needed.
 
-The green state is confirmed using both the current status and today's entry in `attendance_store.json`. A previous day's green status is cleared automatically after the date changes.
+The green state is confirmed using both the current status and today's entry in `data\attendance_store.json`. A previous day's green status is cleared automatically after the date changes.
 
 ## Useful Commands
 
@@ -71,18 +71,21 @@ close_all.bat
 
 ## Important Files
 
-- `attendance.js`: main automation loop.
-- `attendanceStore.js`: today's attendance state.
-- `attendance_store.json`: dates marked as logged.
-- `attendance_log.txt`: automation log.
-- `toast_log.txt`: toast process log.
-- `toast_status.txt`: current toast status.
+- `src\attendance.js`: main automation loop.
+- `src\attendanceStore.js`: today's attendance state.
+- `data\config.txt`: editable settings.
+- `data\attendance_store.json`: dates marked as logged.
+- `data\attendance_log.txt`: automation log.
+- `data\toast_log.txt`: toast process log.
+- `data\toast_status.txt`: current toast status.
 - `run_hidden.vbs`: hidden startup launcher.
-- `setup.ps1`: first-time setup script.
+- `setup.ps1`: source setup and Startup registration.
+- `uninstall.ps1`: removes the Startup shortcut while preserving data.
+- `close_all.bat`: stops attendance processes and dedicated Chrome.
 
 ## Troubleshooting
 
-If the script does not start, run `npm run check` and inspect `attendance_log.txt`.
+If the script does not start, run `npm run check` and inspect `data\attendance_log.txt`.
 
 If the toast is missing, restart with:
 

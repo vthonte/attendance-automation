@@ -16,6 +16,7 @@ import {
   CHROME_PROFILE_DIRECTORY,
   DISABLE_CHROME_BACKGROUND_SERVICES,
   DISABLE_ALL_UI,
+  CHROME_VISIBLE,
   SHOW_LOGGED_DATE,
   SHOW_TOAST_UI,
 } from "./constants.js";
@@ -29,9 +30,9 @@ import {
 } from "./platform.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const BASE = path.dirname(__filename);
+const BASE = process.env.ATTENDANCE_BASE_DIR || path.dirname(path.dirname(__filename));
 
-const DATA = process.env.ATTENDANCE_DATA_DIR || BASE;
+const DATA = process.env.ATTENDANCE_DATA_DIR || path.join(BASE, "data");
 fs.mkdirSync(DATA, { recursive: true });
 const lockFile = path.join(DATA, "attendance_lock.txt");
 const logFile = path.join(DATA, "attendance_log.txt");
@@ -322,7 +323,7 @@ async function connectToChrome() {
     });
   } catch (err) {
     log(`Chrome CDP connection failed, restarting once: ${err.message}`);
-    await startChrome({ visible: false });
+    await startChrome({ visible: CHROME_VISIBLE });
     return chromium.connectOverCDP(`http://${DEBUG_HOST}:${DEBUG_PORT}`, {
       timeout: CDP_CONNECT_TIMEOUT_MS,
     });
@@ -445,7 +446,7 @@ async function clockInIfNeeded() {
   try {
     log(`Starting attendance check for ${localDateKey()}`);
     setStatus("run");
-    await startChrome({ visible: false });
+    await startChrome({ visible: CHROME_VISIBLE });
     chromeStarted = true;
 
     browser = await connectToChrome();

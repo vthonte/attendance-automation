@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const base = path.dirname(fileURLToPath(import.meta.url));
-const file = process.env.ATTENDANCE_CONFIG_FILE || path.join(base, "config.txt");
+const base = process.env.ATTENDANCE_BASE_DIR || path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const file = process.env.ATTENDANCE_CONFIG_FILE || path.join(base, "data", "config.txt");
 const values = {};
 
 if (fs.existsSync(file)) {
@@ -21,7 +21,8 @@ const boolean = (key, fallback) => {
   return !["false", "0", "no", "off"].includes(values[key].toLowerCase());
 };
 export const config = {
-  attendanceUrl: values.ATTENDANCE_URL,
+  companyName: values.COMPANY_NAME || "example",
+  attendanceUrl: `https://${values.COMPANY_NAME || "example"}.keka.com/#/me/attendance/logs`,
   checkIntervalMs: number("CHECK_INTERVAL_MS", 60000),
   manualAttentionIntervalMs: number("MANUAL_ATTENTION_INTERVAL_MS", 150000),
   clockInControlTimeoutMs: number("CLOCK_IN_CONTROL_TIMEOUT_MS", 30000),
@@ -35,4 +36,5 @@ export const config = {
   toastHeight: number("TOAST_HEIGHT", 32),
   disableChromeBackgroundServices: boolean("DISABLE_CHROME_BACKGROUND_SERVICES", true),
   disableAllUi: boolean("DISABLE_ALL_UI", false),
+  chromeVisible: boolean("CHROME_VISIBLE", false),
 };

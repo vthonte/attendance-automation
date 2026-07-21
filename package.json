@@ -1,12 +1,12 @@
 {
   "name": "attendance",
   "version": "1.0.0",
-  "main": "attendance.js",
+  "main": "src/attendance.js",
   "type": "module",
   "scripts": {
-    "attendance": "node attendance.js",
-    "toast": "electron notifyToast.js",
-    "check": "node --check attendance.js && node --check notifyToast.js && node --check platform.js && node --check store.js && node --check attendanceStore.js"
+    "attendance": "node src/attendance.js",
+    "toast": "electron src/notifyToast.js",
+    "check": "node --check src/attendance.js && node --check src/notifyToast.js && node --check src/platform.js && node --check src/store.js && node --check src/attendanceStore.js"
   },
   "keywords": [],
   "author": "",

@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 const storeFile = process.env.ATTENDANCE_DATA_DIR
   ? path.join(process.env.ATTENDANCE_DATA_DIR, "attendance_store.json")
-  : path.join(__dirname, "attendance_store.json");
+  : path.join(path.dirname(__dirname), "data", "attendance_store.json");
 
 fs.mkdirSync(path.dirname(storeFile), { recursive: true });
 
