@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { chromium } from "playwright";
 import {
   attendanceUrl,
+  COMPANY_NAME,
   CDP_CONNECT_TIMEOUT_MS,
   CHECK_INTERVAL_MS,
   CLOCK_IN_CONTROL_TIMEOUT_MS,
@@ -55,6 +56,11 @@ function localDateKey(date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function isValidCompanyName(name) {
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(name) &&
+    !["example", "company", "your-company", "test"].includes(name.toLowerCase());
 }
 
 function setStatus(status) {
@@ -562,7 +568,12 @@ async function main() {
   log(`Data directory: ${DATA}`);
   log(`Attendance URL: ${attendanceUrl}`);
   startToast();
-
+  if (!isValidCompanyName(COMPANY_NAME)) {
+    setStatus("error");
+    log(`Invalid COMPANY_NAME '${COMPANY_NAME}'. Update data\\config.txt before restarting.`);
+    log("Attendance paused because configuration is invalid; toast will remain visible.");
+    while (true) await sleep(60_000);
+  }
   while (true) {
     const checkDate = localDateKey();
     const delay = (await clockInIfNeeded()) || CHECK_INTERVAL_MS;

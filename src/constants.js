@@ -1,5 +1,6 @@
 import { config } from "./configLoader.js";
 export const attendanceUrl = config.attendanceUrl;
+export const COMPANY_NAME = config.companyName;
 export const CHECK_INTERVAL_MS = config.checkIntervalMs;
 export const MANUAL_ATTENTION_INTERVAL_MS = config.manualAttentionIntervalMs;
 export const DEBUG_HOST = config.debugHost;
