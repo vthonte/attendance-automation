@@ -407,6 +407,8 @@ async function openChromeForManualAttention() {
   const chrome = spawn(chromePath, [
     `--user-data-dir=${getChromeDebugProfile(BASE)}`,
     `--profile-directory=${CHROME_PROFILE_DIRECTORY}`,
+    "--new-window",
+    "--disable-background-mode",
     "--no-first-run",
     attendanceUrl,
   ], {
@@ -416,7 +418,15 @@ async function openChromeForManualAttention() {
   });
 
   chrome.unref();
+  log(`Manual Chrome launch requested (pid ${chrome.pid ?? "unknown"})`);
   chrome.on("error", (err) => log("Chrome failed to start: " + err.message));
+  chrome.on("exit", (code, signal) => {
+    if (code !== 0 && code !== null) {
+      log(`Manual Chrome process exited: code=${code}`);
+    } else if (signal) {
+      log(`Manual Chrome process exited by signal: ${signal}`);
+    }
+  });
   await sleep(1000);
   await bringChromeToFront();
 }
