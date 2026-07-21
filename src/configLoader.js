@@ -23,6 +23,9 @@ const boolean = (key, fallback) => {
 export const config = {
   companyName: values.COMPANY_NAME || "example",
   attendanceUrl: `https://${values.COMPANY_NAME || "example"}.keka.com/#/me/attendance/logs`,
+  clockInMode: ["remote", "web", "auto"].includes((values.CLOCK_IN_MODE || "web").toLowerCase())
+    ? (values.CLOCK_IN_MODE || "web").toLowerCase()
+    : "web",
   checkIntervalMs: number("CHECK_INTERVAL_MS", 60000),
   manualAttentionIntervalMs: number("MANUAL_ATTENTION_INTERVAL_MS", 150000),
   clockInControlTimeoutMs: number("CLOCK_IN_CONTROL_TIMEOUT_MS", 30000),

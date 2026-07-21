@@ -18,6 +18,7 @@ import {
   DISABLE_CHROME_BACKGROUND_SERVICES,
   DISABLE_ALL_UI,
   CHROME_VISIBLE,
+  CLOCK_IN_MODE,
   SHOW_LOGGED_DATE,
   SHOW_TOAST_UI,
 } from "./constants.js";
@@ -464,14 +465,25 @@ async function clockInIfNeeded() {
     await gotoWithNetworkRetry(page, attendanceUrl);
     log("Attendance page loaded");
 
-    const clockIn = () => page.getByText(/Remote Clock\s*-?\s*In/i).first();
+    const remoteClockIn = () => page.getByText(/Remote Clock\s*-?\s*In/i).first();
+    const webClockIn = () => page.getByText(/Web Clock\s*-?\s*In/i).first();
     const submit = () =>
       page
         .locator(
           "//button[contains(@class, 'btn-primary') and contains(@class, 'btn-sm')]",
         )
         .first();
-    const clockOut = () => page.getByText(/Remote Clock\s*-?\s*Out/i).first();
+    const remoteClockOut = () => page.getByText(/Remote Clock\s*-?\s*Out/i).first();
+    const webClockOut = () => page.getByText(/Web Clock\s*-?\s*Out/i).first();
+    const clockOut = () => page.getByText(/(?:Remote|Web) Clock\s*-?\s*Out/i).first();
+    const clockInControls = CLOCK_IN_MODE === "web"
+      ? [{ name: "webClockIn", locator: webClockIn(), factory: webClockIn }]
+      : CLOCK_IN_MODE === "auto"
+        ? [
+            { name: "remoteClockIn", locator: remoteClockIn(), factory: remoteClockIn },
+            { name: "webClockIn", locator: webClockIn(), factory: webClockIn },
+          ]
+        : [{ name: "remoteClockIn", locator: remoteClockIn(), factory: remoteClockIn }];
 
     try {
       const clockOutControl = clockOut();
@@ -493,12 +505,12 @@ async function clockInIfNeeded() {
     const visibleControl = await firstVisibleControl(
       [
         { name: "clockOut", locator: clockOut() },
-        { name: "clockIn", locator: clockIn() },
+        ...clockInControls,
       ],
       Math.max(CLOCK_IN_CONTROL_TIMEOUT_MS, CLOCK_OUT_CONTROL_TIMEOUT_MS),
     );
 
-    if (visibleControl === "clockIn") {
+    if (visibleControl === "remoteClockIn" || visibleControl === "webClockIn") {
       if (await clockOut().isVisible()) {
         markLoggedToday();
         setStatus("in");
@@ -506,8 +518,10 @@ async function clockInIfNeeded() {
         return CHECK_INTERVAL_MS;
       }
 
-      log("Clicking clock-in control");
-      await clickFresh(clockIn, "Remote Clock-In");
+      const selectedControl = clockInControls.find((control) => control.name === visibleControl);
+      const label = visibleControl === "webClockIn" ? "Web Clock-In" : "Remote Clock-In";
+      log(`Clicking ${label} control (mode: ${CLOCK_IN_MODE})`);
+      await clickFresh(selectedControl.factory, label);
       await clickFresh(submit, "clock-in submit");
       markLoggedToday();
       setStatus("in");
