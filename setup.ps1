@@ -11,6 +11,8 @@ if (-not (Test-Path "data\config.txt")) {
 # Attendance automation settings. Restart after changing values.
 COMPANY_NAME=example
 CLOCK_IN_MODE=web
+SKIP_CHECK_FROM=00:00
+SKIP_CHECK_UNTIL=08:00
 CHECK_INTERVAL_MS=60000
 MANUAL_ATTENTION_INTERVAL_MS=150000
 CLOCK_IN_CONTROL_TIMEOUT_MS=30000
@@ -50,6 +52,8 @@ $configLines = @(
   "# Attendance automation settings. Restart after changing values.",
   "COMPANY_NAME=$(Ask-Value COMPANY_NAME 'Keka company name')",
   "CLOCK_IN_MODE=$(Ask-Value CLOCK_IN_MODE 'Clock-in mode: remote, web, or auto')",
+  "SKIP_CHECK_FROM=$(Ask-Value SKIP_CHECK_FROM 'Do not check from time')",
+  "SKIP_CHECK_UNTIL=$(Ask-Value SKIP_CHECK_UNTIL 'Resume checks at time')",
   "CHECK_INTERVAL_MS=$(Ask-Value CHECK_INTERVAL_MS 'Check interval in milliseconds')",
   "MANUAL_ATTENTION_INTERVAL_MS=$(Ask-Value MANUAL_ATTENTION_INTERVAL_MS 'Manual attention interval in milliseconds')",
   "CLOCK_IN_CONTROL_TIMEOUT_MS=$(Ask-Value CLOCK_IN_CONTROL_TIMEOUT_MS 'Clock-in control timeout in milliseconds')",

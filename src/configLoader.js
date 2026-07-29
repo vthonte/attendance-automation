@@ -26,6 +26,8 @@ export const config = {
   clockInMode: ["remote", "web", "auto"].includes((values.CLOCK_IN_MODE || "web").toLowerCase())
     ? (values.CLOCK_IN_MODE || "web").toLowerCase()
     : "web",
+  skipCheckFrom: values.SKIP_CHECK_FROM || "00:00",
+  skipCheckUntil: values.SKIP_CHECK_UNTIL || "08:00",
   checkIntervalMs: number("CHECK_INTERVAL_MS", 60000),
   manualAttentionIntervalMs: number("MANUAL_ATTENTION_INTERVAL_MS", 150000),
   clockInControlTimeoutMs: number("CLOCK_IN_CONTROL_TIMEOUT_MS", 30000),

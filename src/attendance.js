@@ -21,6 +21,8 @@ import {
   CLOCK_IN_MODE,
   SHOW_LOGGED_DATE,
   SHOW_TOAST_UI,
+  SKIP_CHECK_FROM,
+  SKIP_CHECK_UNTIL,
 } from "./constants.js";
 import { isLoggedToday, markLoggedToday } from "./attendanceStore.js";
 import {
@@ -62,6 +64,25 @@ function localDateKey(date = new Date()) {
 function isValidCompanyName(name) {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(name) &&
     !["example", "company", "your-company", "test"].includes(name.toLowerCase());
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function quietWindowDelay(now = new Date()) {
+  const current = now.getHours() * 60 + now.getMinutes();
+  const start = timeToMinutes(SKIP_CHECK_FROM);
+  const end = timeToMinutes(SKIP_CHECK_UNTIL);
+  const inWindow = start < end
+    ? current >= start && current < end
+    : current >= start || current < end;
+  if (!inWindow) return 0;
+
+  let minutes = end - current;
+  if (minutes <= 0) minutes += 24 * 60;
+  return minutes * 60_000 - now.getSeconds() * 1_000 - now.getMilliseconds();
 }
 
 function setStatus(status) {
@@ -443,6 +464,13 @@ async function clockInIfNeeded() {
   let browser = null;
   let chromeStarted = false;
   let keepChromeOpen = false;
+
+  const quietDelay = quietWindowDelay();
+  if (quietDelay > 0) {
+    setStatus("out");
+    log(`Skipping attendance check during quiet window ${SKIP_CHECK_FROM}-${SKIP_CHECK_UNTIL}; next check in ${Math.ceil(quietDelay / 60_000)} minutes`);
+    return quietDelay;
+  }
 
   if (isLoggedToday()) {
     setStatus("in");
