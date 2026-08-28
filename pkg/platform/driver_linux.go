@@ -179,6 +179,14 @@ func (d *linuxDriver) IsAutostartInstalled(cfg *core.Config) bool {
 	return err == nil
 }
 
+func getAtom(X *xgb.Conn, name string) xproto.Atom {
+	reply, err := xproto.InternAtom(X, false, uint16(len(name)), name).Reply()
+	if err != nil {
+		return 0
+	}
+	return reply.Atom
+}
+
 func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-chan core.StatusEvent) {
 	display := os.Getenv("DISPLAY")
 	if display == "" {
@@ -217,11 +225,19 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 		height = 32
 	}
 
+	eventMask := uint32(
+		xproto.EventMaskExposure |
+			xproto.EventMaskStructureNotify |
+			xproto.EventMaskEnterWindow |
+			xproto.EventMaskLeaveWindow |
+			xproto.EventMaskPointerMotion,
+	)
+
 	mask := uint32(xproto.CwBackPixel | xproto.CwOverrideRedirect | xproto.CwEventMask)
 	values := []uint32{
 		screen.BlackPixel,
-		1, // OverrideRedirect = true (stays on top, no window manager chrome)
-		xproto.EventMaskExposure | xproto.EventMaskStructureNotify,
+		1, // OverrideRedirect = true (stays on top, no window manager decorations)
+		eventMask,
 	}
 
 	err = xproto.CreateWindowChecked(
@@ -242,6 +258,25 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 		return
 	}
 
+	// Set EWMH NetWM atoms for ALWAYS-ON-TOP dock surface
+	netWmWindowType := getAtom(X, "_NET_WM_WINDOW_TYPE")
+	netWmWindowTypeDock := getAtom(X, "_NET_WM_WINDOW_TYPE_DOCK")
+	if netWmWindowType != 0 && netWmWindowTypeDock != 0 {
+		_ = xproto.ChangePropertyChecked(X, xproto.PropModeReplace, win, netWmWindowType, xproto.AtomAtom, 32, 1, []byte{
+			byte(netWmWindowTypeDock), byte(netWmWindowTypeDock >> 8), byte(netWmWindowTypeDock >> 16), byte(netWmWindowTypeDock >> 24),
+		}).Check()
+	}
+
+	netWmState := getAtom(X, "_NET_WM_STATE")
+	netWmStateAbove := getAtom(X, "_NET_WM_STATE_ABOVE")
+	netWmStateStaysOnTop := getAtom(X, "_NET_WM_STATE_STAYS_ON_TOP")
+	if netWmState != 0 && netWmStateAbove != 0 {
+		_ = xproto.ChangePropertyChecked(X, xproto.PropModeReplace, win, netWmState, xproto.AtomAtom, 32, 2, []byte{
+			byte(netWmStateAbove), byte(netWmStateAbove >> 8), byte(netWmStateAbove >> 16), byte(netWmStateAbove >> 24),
+			byte(netWmStateStaysOnTop), byte(netWmStateStaysOnTop >> 8), byte(netWmStateStaysOnTop >> 16), byte(netWmStateStaysOnTop >> 24),
+		}).Check()
+	}
+
 	gc, err := xproto.NewGcontextId(X)
 	if err != nil {
 		return
@@ -250,13 +285,28 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 
 	_ = xproto.MapWindow(X, win)
 
+	// Keep window on top (restack above maximized windows)
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = xproto.ConfigureWindow(X, win, xproto.ConfigWindowStackMode, []uint32{xproto.StackModeAbove})
+			}
+		}
+	}()
+
 	var (
-		currentEv core.StatusEvent
+		currentEv      core.StatusEvent
+		isBadgeHovered bool
 	)
 
-	drawToast := func(ev core.StatusEvent) {
+	drawToast := func() {
 		var colorPixel uint32
-		switch ev.ColorName {
+		switch currentEv.ColorName {
 		case "lightgreen":
 			colorPixel = 0x90EE90
 		case "khaki":
@@ -267,28 +317,38 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 			colorPixel = 0xD3D3D3
 		}
 
-		if ev.BarVisible {
+		if currentEv.BarVisible {
+			// Clear background
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{screen.BlackPixel})
 			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: 0, Y: 0, Width: width, Height: height}})
 
+			// Draw 3px colored bar at the very top
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{colorPixel})
 			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: 0, Y: 0, Width: width, Height: 3}})
 		}
 
-		if ev.DisplayText != "" {
-			badgeX := int16(width) - int16(len(ev.DisplayText)*8+30)
+		// Draw badge ONLY when hovered over the top right area
+		if currentEv.DisplayText != "" && isBadgeHovered && cfg.ShowLoggedDate {
+			badgeWidth := uint16(len(currentEv.DisplayText)*8 + 24)
+			if badgeWidth < 90 {
+				badgeWidth = 90
+			}
+			badgeX := int16(width) - int16(badgeWidth) - 12
 			if badgeX < 0 {
 				badgeX = 10
 			}
 
-			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{0x222222})
-			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: badgeX, Y: 5, Width: uint16(len(ev.DisplayText)*8 + 20), Height: 20}})
+			// Dark badge background
+			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{0x1C1814})
+			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: badgeX, Y: 5, Width: badgeWidth, Height: 20}})
 
+			// Badge border colored with status color
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{colorPixel})
-			_ = xproto.PolyRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: badgeX, Y: 5, Width: uint16(len(ev.DisplayText)*8 + 20), Height: 20}})
+			_ = xproto.PolyRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: badgeX, Y: 5, Width: badgeWidth, Height: 20}})
 
+			// White text
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{0xFFFFFF})
-			_ = xproto.ImageText8(X, byte(len(ev.DisplayText)), xproto.Drawable(win), gc, badgeX+10, 19, ev.DisplayText)
+			_ = xproto.ImageText8(X, byte(len(currentEv.DisplayText)), xproto.Drawable(win), gc, badgeX+10, 19, currentEv.DisplayText)
 		}
 	}
 
@@ -299,7 +359,7 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 				return
 			case ev := <-events:
 				currentEv = ev
-				drawToast(ev)
+				drawToast()
 			}
 		}
 	}()
@@ -314,16 +374,43 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 
 		ev, err := X.WaitForEvent()
 		if err != nil {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 		if ev == nil {
 			return
 		}
 
-		switch ev.(type) {
+		switch e := ev.(type) {
 		case xproto.ExposeEvent:
-			drawToast(currentEv)
+			drawToast()
+
+		case xproto.EnterNotifyEvent:
+			if e.EventX >= int16(width)-260 && e.EventY <= 32 {
+				if !isBadgeHovered {
+					isBadgeHovered = true
+					drawToast()
+				}
+			}
+
+		case xproto.LeaveNotifyEvent:
+			if isBadgeHovered {
+				isBadgeHovered = false
+				drawToast()
+			}
+
+		case xproto.MotionNotifyEvent:
+			if e.EventX >= int16(width)-260 && e.EventY <= 32 {
+				if !isBadgeHovered {
+					isBadgeHovered = true
+					drawToast()
+				}
+			} else {
+				if isBadgeHovered {
+					isBadgeHovered = false
+					drawToast()
+				}
+			}
 		}
 	}
 }
