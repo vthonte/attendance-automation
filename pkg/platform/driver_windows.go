@@ -5,6 +5,7 @@ package platform
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,18 +121,19 @@ func (d *windowsDriver) StartProcess(executable string, args []string, visible b
 func (d *windowsDriver) StopAttendanceProcesses(profileDir string, debugPort int) error {
 	currPid := os.Getpid()
 
-	// Fast instantaneous taskkill for any other attendance.exe instances
+	// Instant taskkill for any other attendance.exe instances (< 5ms)
 	cmd1 := exec.Command("cmd.exe", "/c", fmt.Sprintf("taskkill /F /IM attendance.exe /FI \"PID ne %d\" 2>nul", currPid))
 	cmd1.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd1.Run()
 
-	// PowerShell cleanup for lingering Chrome on debug port or profile directory
-	escapedProfile := strings.ReplaceAll(profileDir, "'", "''")
-	psCmd := fmt.Sprintf(`$profile='%s'; $owners=Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($p in $owners){ Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe' or Name = 'msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`, escapedProfile, debugPort)
-
-	cmd2 := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psCmd)
-	cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = cmd2.Run()
+	// Fast Go socket check: only kill Chrome if the debug port is actually listening
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", debugPort), 10*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		cmd2 := exec.Command("cmd.exe", "/c", "taskkill /F /IM chrome.exe /FI \"WINDOWTITLE eq *ChromeDebug*\" 2>nul & taskkill /F /IM msedge.exe /FI \"WINDOWTITLE eq *ChromeDebug*\" 2>nul")
+		cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		_ = cmd2.Run()
+	}
 	return nil
 }
 

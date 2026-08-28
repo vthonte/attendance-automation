@@ -169,7 +169,6 @@ func main() {
 	// Default Mode: Daemon Loop + Native Toast + Web Dashboard
 	profileDir := driver.GetDebugProfileDir(cfg.BaseDir)
 	_ = driver.StopAttendanceProcesses(profileDir, cfg.DebugPort)
-	time.Sleep(100 * time.Millisecond)
 
 	release, err := core.AcquireLock(cfg.DataDir, driver)
 	if err != nil {

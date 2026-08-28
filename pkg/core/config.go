@@ -116,7 +116,6 @@ func LoadConfig() (*Config, error) {
 
 	values := make(map[string]string)
 	if f, err := os.Open(configFile); err == nil {
-		defer f.Close()
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
@@ -126,6 +125,16 @@ func LoadConfig() (*Config, error) {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
 				values[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			}
+		}
+		_ = f.Close()
+
+		// Auto-populate BAR_HEIGHT if missing from existing config file
+		if _, hasBarHeight := values["BAR_HEIGHT"]; !hasBarHeight {
+			if af, err := os.OpenFile(configFile, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+				_, _ = af.WriteString("\n# Thickness of the status line at the very top of screen in pixels (e.g. 1, 2, 3)\nBAR_HEIGHT=2\n")
+				_ = af.Close()
+				values["BAR_HEIGHT"] = "2"
 			}
 		}
 	}
