@@ -1,12 +1,23 @@
-node_modules/
-dist/
-data/config.txt
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-*.log
-attendance_log.txt
-toast_log.txt
+# Data directory runtime files
+data/attendance_store.json
+data/toast_status.txt
+data/toast_status.txt.tmp
+data/attendance_log.txt
+data/toast_log.txt
+data/attendance_lock.txt
+data/ChromeDebug/
+data/browser/
 
-attendance_lock.txt
-attendance_run.lock
-attendance_store.json
-toast_status.txt
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
