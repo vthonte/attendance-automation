@@ -36,22 +36,38 @@ const kekaInspectorScript = `
     const regex = new RegExp(regexStr, 'i');
     const elements = Array.from(document.querySelectorAll(tagFilter));
     for (const el of elements) {
-      if (regex.test(el.textContent) && isVisible(el)) {
+      if (regex.test(el.textContent.trim()) && isVisible(el)) {
         return el;
       }
     }
     return null;
   }
 
-  // 1. Check if already clocked out / in
-  const clockOut = findByText('(?:Remote|Web)\\s*Clock\\s*-?\\s*Out');
+  // 1. Check if user is on a login / authentication page
+  const isLoginPage = window.location.href.includes('/login') || 
+                      window.location.href.includes('login.microsoftonline.com') ||
+                      window.location.href.includes('accounts.google.com') ||
+                      document.querySelector('input[type="password"]') !== null ||
+                      findByText('^(?:Sign\\s*in|Log\\s*in|Continue with)$', 'button, a, h1, h2');
+  if (isLoginPage) {
+    return JSON.stringify({ state: 'needs_login', message: 'User is on login page' });
+  }
+
+  // 2. Ensure we are on the attendance logs page
+  if (window.location.hash && !window.location.hash.includes('/me/attendance')) {
+    window.location.hash = '#/me/attendance/logs';
+  }
+
+  // 3. Check if already clocked out / in
+  const clockOut = findByText('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
   if (clockOut) {
     return JSON.stringify({ state: 'already_clocked_in', message: 'Clock-out button is present' });
   }
 
-  // 2. Check for clock-in buttons
+  // 4. Check for clock-in buttons
   const remoteIn = findByText('Remote\\s*Clock\\s*-?\\s*In');
   const webIn = findByText('Web\\s*Clock\\s*-?\\s*In');
+  const genericIn = findByText('^Clock\\s*-?\\s*In$', 'button, a, span');
 
   let targetBtn = null;
   let btnType = '';
@@ -60,30 +76,25 @@ const kekaInspectorScript = `
 
   if (mode === 'web') {
     if (webIn) { targetBtn = webIn; btnType = 'webClockIn'; }
+    else if (genericIn) { targetBtn = genericIn; btnType = 'webClockIn'; }
   } else if (mode === 'remote') {
     if (remoteIn) { targetBtn = remoteIn; btnType = 'remoteClockIn'; }
+    else if (genericIn) { targetBtn = genericIn; btnType = 'remoteClockIn'; }
   } else { // auto
     if (remoteIn) { targetBtn = remoteIn; btnType = 'remoteClockIn'; }
     else if (webIn) { targetBtn = webIn; btnType = 'webClockIn'; }
+    else if (genericIn) { targetBtn = genericIn; btnType = 'genericClockIn'; }
   }
 
   if (!targetBtn) {
-    if (remoteIn || webIn) {
-      targetBtn = remoteIn || webIn;
-      btnType = remoteIn ? 'remoteClockIn' : 'webClockIn';
+    if (remoteIn || webIn || genericIn) {
+      targetBtn = remoteIn || webIn || genericIn;
+      btnType = remoteIn ? 'remoteClockIn' : (webIn ? 'webClockIn' : 'genericClockIn');
     }
   }
 
   if (targetBtn) {
     return JSON.stringify({ state: 'clock_in_found', button: btnType });
-  }
-
-  // 3. Check if on a login page or requires attention
-  const isLoginPage = window.location.href.includes('/login') || 
-                      document.querySelector('input[type="password"]') !== null ||
-                      findByText('Sign\\s*in', 'button, a, h1, h2');
-  if (isLoginPage) {
-    return JSON.stringify({ state: 'needs_login', message: 'User is on login page' });
   }
 
   return JSON.stringify({ state: 'not_found', message: 'No attendance controls found' });
@@ -104,7 +115,7 @@ const kekaClockInScript = `
     const regex = new RegExp(regexStr, 'i');
     const elements = Array.from(document.querySelectorAll(tagFilter));
     for (const el of elements) {
-      if (regex.test(el.textContent) && isVisible(el)) {
+      if (regex.test(el.textContent.trim()) && isVisible(el)) {
         return el;
       }
     }
@@ -118,11 +129,12 @@ const kekaClockInScript = `
   const mode = '%s';
   const remoteIn = findByText('Remote\\s*Clock\\s*-?\\s*In');
   const webIn = findByText('Web\\s*Clock\\s*-?\\s*In');
+  const genericIn = findByText('^Clock\\s*-?\\s*In$', 'button, a, span');
 
   let targetBtn = null;
-  if (mode === 'web') targetBtn = webIn || remoteIn;
-  else if (mode === 'remote') targetBtn = remoteIn || webIn;
-  else targetBtn = remoteIn || webIn;
+  if (mode === 'web') targetBtn = webIn || genericIn || remoteIn;
+  else if (mode === 'remote') targetBtn = remoteIn || genericIn || webIn;
+  else targetBtn = remoteIn || webIn || genericIn;
 
   if (!targetBtn) {
     return JSON.stringify({ state: 'error', message: 'Clock-in button vanished' });
@@ -138,7 +150,7 @@ const kekaClockInScript = `
                   document.querySelector("button.btn-primary");
 
   if (!submitBtn) {
-    submitBtn = findByText('^(?:Submit|Confirm|Clock\\s*In|Save)$', 'button');
+    submitBtn = findByText('^(?:Submit|Confirm|Clock\\s*In|Save|Proceed|Yes|OK)$', 'button');
   }
 
   if (submitBtn) {

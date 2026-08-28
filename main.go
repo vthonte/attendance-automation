@@ -133,7 +133,7 @@ func main() {
 	// Command: --dashboard (run dashboard only)
 	if *dashboardFlag {
 		fmt.Printf("Starting Web Dashboard on http://127.0.0.1:%d\n", *dashboardPortFlag)
-		core.StartWebDashboard(ctx, cfg, *dashboardPortFlag)
+		core.StartWebDashboard(ctx, engine, *dashboardPortFlag)
 		return
 	}
 
@@ -175,7 +175,7 @@ func main() {
 		go driver.ShowToast(ctx, cfg, engine.EventBus.Subscribe())
 	}
 
-	go core.StartWebDashboard(ctx, cfg, *dashboardPortFlag)
+	go core.StartWebDashboard(ctx, engine, *dashboardPortFlag)
 
 	if err := engine.Run(ctx); err != nil && err != context.Canceled {
 		core.Log(cfg.DataDir, fmt.Sprintf("Fatal daemon error: %v", err))

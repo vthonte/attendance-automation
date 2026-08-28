@@ -33,9 +33,11 @@ const webDashboardHTML = `<!DOCTYPE html>
     .info-label { font-size: 12px; color: #8a99ad; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
     .info-value { font-size: 15px; font-weight: 500; }
     .logs-box { background: #0b0f16; border: 1px solid #1f2a3a; border-radius: 8px; padding: 14px; font-family: monospace; font-size: 12px; line-height: 1.5; max-height: 240px; overflow-y: auto; color: #a9b7c6; white-space: pre-wrap; }
-    .actions { display: flex; gap: 12px; margin-top: 16px; }
-    button { background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #1d4ed8; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; align-items: center; }
+    button { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+    button:hover:not(:disabled) { background: #1d4ed8; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .msg { font-size: 13px; color: #94a3b8; }
   </style>
 </head>
 <body>
@@ -43,7 +45,7 @@ const webDashboardHTML = `<!DOCTYPE html>
     <div class="card">
       <h1>
         <span>Attendance Automation</span>
-        <span class="badge {{.StatusClass}}">{{.StatusText}}</span>
+        <span id="statusBadge" class="badge {{.StatusClass}}">{{.StatusText}}</span>
       </h1>
       <p style="color: #8a99ad; font-size: 14px;">Automated Keka Clock-In Service</p>
 
@@ -67,15 +69,66 @@ const webDashboardHTML = `<!DOCTYPE html>
       </div>
 
       <div class="actions">
-        <button onclick="location.reload()">Refresh Status</button>
+        <button id="checkBtn" onclick="triggerCheck()">Check Attendance Now</button>
+        <span id="actionMsg" class="msg">Runs check immediately and resumes regular loop</span>
       </div>
     </div>
 
     <div class="card">
       <h2 style="font-size: 16px; margin-bottom: 12px; color: #cbd5e1;">Recent Logs</h2>
-      <div class="logs-box">{{.Logs}}</div>
+      <div id="logsBox" class="logs-box">{{.Logs}}</div>
     </div>
   </div>
+
+  <script>
+    async function triggerCheck() {
+      const btn = document.getElementById('checkBtn');
+      const msg = document.getElementById('actionMsg');
+      btn.disabled = true;
+      btn.textContent = 'Checking attendance...';
+      msg.textContent = 'Starting automated check...';
+
+      try {
+        await fetch('/api/check', { method: 'POST' });
+        msg.textContent = 'Check initiated! Refreshing status...';
+        
+        let attempts = 0;
+        const interval = setInterval(async () => {
+          attempts++;
+          await updateStatus();
+          if (attempts >= 6) {
+            clearInterval(interval);
+            btn.disabled = false;
+            btn.textContent = 'Check Attendance Now';
+            msg.textContent = 'Resumed 60-second automated check loop.';
+          }
+        }, 1500);
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Check Attendance Now';
+        msg.textContent = 'Error triggering check.';
+      }
+    }
+
+    async function updateStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        const badge = document.getElementById('statusBadge');
+        badge.className = 'badge ' + data.status;
+        badge.textContent = data.status_text;
+
+        if (data.logs) {
+          const logsBox = document.getElementById('logsBox');
+          logsBox.textContent = data.logs;
+          logsBox.scrollTop = logsBox.scrollHeight;
+        }
+      } catch (e) {}
+    }
+
+    // Auto-poll status every 4 seconds
+    setInterval(updateStatus, 4000);
+  </script>
 </body>
 </html>`
 
@@ -90,7 +143,8 @@ type dashboardData struct {
 	Logs          string
 }
 
-func StartWebDashboard(ctx context.Context, cfg *Config, port int) {
+func StartWebDashboard(ctx context.Context, engine *Engine, port int) {
+	cfg := engine.Cfg
 	tmpl, err := template.New("dashboard").Parse(webDashboardHTML)
 	if err != nil {
 		return
@@ -129,6 +183,15 @@ func StartWebDashboard(ctx context.Context, cfg *Config, port int) {
 		_ = tmpl.Execute(w, data)
 	})
 
+	mux.HandleFunc("/api/check", func(w http.ResponseWriter, r *http.Request) {
+		engine.TriggerCheck()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":  "ok",
+			"message": "Attendance check triggered",
+		})
+	})
+
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		status, dateKey, _ := GetStatus(cfg.DataDir)
 		loggedToday := IsLoggedToday(cfg.DataDir)
@@ -138,6 +201,15 @@ func StartWebDashboard(ctx context.Context, cfg *Config, port int) {
 		}
 		statusText, color := GetStatusDisplay(status, dateKey, true)
 
+		var logs string
+		if data, err := os.ReadFile(AttendanceLogFilePath(cfg.DataDir)); err == nil {
+			lines := strings.Split(string(data), "\n")
+			if len(lines) > 50 {
+				lines = lines[len(lines)-50:]
+			}
+			logs = strings.Join(lines, "\n")
+		}
+
 		res := map[string]any{
 			"status":       status,
 			"status_text":  statusText,
@@ -146,6 +218,7 @@ func StartWebDashboard(ctx context.Context, cfg *Config, port int) {
 			"date":         dateKey,
 			"company":      cfg.CompanyName,
 			"mode":         cfg.ClockInMode,
+			"logs":         logs,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

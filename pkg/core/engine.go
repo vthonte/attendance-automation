@@ -10,16 +10,25 @@ import (
 )
 
 type Engine struct {
-	Cfg      *Config
-	Driver   PlatformDriver
-	EventBus *EventBus
+	Cfg         *Config
+	Driver      PlatformDriver
+	EventBus    *EventBus
+	triggerChan chan struct{}
 }
 
 func NewEngine(cfg *Config, driver PlatformDriver) *Engine {
 	return &Engine{
-		Cfg:      cfg,
-		Driver:   driver,
-		EventBus: NewEventBus(),
+		Cfg:         cfg,
+		Driver:      driver,
+		EventBus:    NewEventBus(),
+		triggerChan: make(chan struct{}, 1),
+	}
+}
+
+func (e *Engine) TriggerCheck() {
+	select {
+	case e.triggerChan <- struct{}{}:
+	default:
 	}
 }
 
@@ -81,6 +90,8 @@ func (e *Engine) SleepUntilNextCheck(ctx context.Context, delay time.Duration, p
 	select {
 	case <-ctx.Done():
 		return
+	case <-e.triggerChan:
+		Log(e.Cfg.DataDir, "Immediate attendance check requested; resuming check loop")
 	case <-time.After(delay):
 	}
 
