@@ -334,40 +334,7 @@ func winColorRefFromName(name string) uint32 {
 func winWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case 0x0084: // WM_NCHITTEST
-		x := int32(int16(lParam & 0xFFFF))
-		y := int32(int16((lParam >> 16) & 0xFFFF))
-		cx, _, _ := pGetSystemMetrics.Call(0)
-		if x >= int32(cx)-260 && y <= 32 {
-			return 1 // HTCLIENT (allow mouse events on badge)
-		}
-		return ^uintptr(0) // HTTRANSPARENT (-1)
-
-	case 0x0200: // WM_MOUSEMOVE
-		if !isBadgeHovered {
-			isBadgeHovered = true
-			pInvalidateRect.Call(hwnd, 0, 1)
-
-			var tme TRACKMOUSEEVENT
-			tme.CbSize = uint32(unsafe.Sizeof(tme))
-			tme.DwFlags = 0x00000002 // TME_LEAVE
-			tme.HwndTrack = hwnd
-			pTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
-		}
-		return 0
-
-	case 0x0202: // WM_LBUTTONUP
-		cx, _, _ := pGetSystemMetrics.Call(0)
-		x := int32(int16(lParam & 0xFFFF))
-		y := int32(int16((lParam >> 16) & 0xFFFF))
-		if x >= int32(cx)-260 && y <= 32 {
-			_ = core.OpenBrowser("http://127.0.0.1:9333")
-		}
-		return 0
-
-	case 0x02A3: // WM_MOUSELEAVE
-		isBadgeHovered = false
-		pInvalidateRect.Call(hwnd, 0, 1)
-		return 0
+		return ^uintptr(0) // HTTRANSPARENT (-1) 100% click-through, never interferes with clicks
 
 	case 0x000F: // WM_PAINT
 		var ps PAINTSTRUCT
