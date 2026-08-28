@@ -520,6 +520,11 @@ func (d *windowsDriver) ShowToast(ctx context.Context, cfg *core.Config, events 
 					toastMu.Unlock()
 
 					if changed && h != 0 {
+						curH := uintptr(3)
+						if isBadgeHovered && toastText != "" && cfg.ShowLoggedDate {
+							curH = height
+						}
+						pSetWindowPos.Call(h, ^uintptr(0), 0, 0, wCx, curH, 0x0040|0x0010)
 						pInvalidateRect.Call(h, 0, 1)
 					}
 				}
