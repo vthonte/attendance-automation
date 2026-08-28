@@ -103,7 +103,8 @@ func (d *darwinDriver) StartProcess(executable string, args []string, visible bo
 }
 
 func (d *darwinDriver) StopAttendanceProcesses(profileDir string, debugPort int) error {
-	shCmd := fmt.Sprintf(`pkill -f "%s" 2>/dev/null || true; lsof -ti:%d | xargs kill -9 2>/dev/null || true`, strings.ReplaceAll(profileDir, `"`, `\"`), debugPort)
+	currPid := os.Getpid()
+	shCmd := fmt.Sprintf(`pgrep -f "attendance" | grep -v "^%d$" | xargs -r kill -9 2>/dev/null || true; pkill -f "%s" 2>/dev/null || true; lsof -ti:%d | xargs kill -9 2>/dev/null || true`, currPid, strings.ReplaceAll(profileDir, `"`, `\"`), debugPort)
 	cmd := exec.Command("sh", "-c", shCmd)
 	_ = cmd.Run()
 	return nil

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -70,9 +71,16 @@ func main() {
 	// Command: --stop
 	if *stopFlag {
 		fmt.Println("Stopping attendance processes...")
+		lockFile := core.LockFilePath(cfg.DataDir)
+		if data, err := os.ReadFile(lockFile); err == nil {
+			if oldPid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && oldPid != os.Getpid() {
+				_ = driver.KillProcess(oldPid)
+			}
+		}
 		profileDir := driver.GetDebugProfileDir(cfg.BaseDir)
 		_ = driver.StopAttendanceProcesses(profileDir, cfg.DebugPort)
-		_ = os.Remove(core.LockFilePath(cfg.DataDir))
+		_ = os.Remove(lockFile)
+		core.Log(cfg.DataDir, "Attendance daemon stopped via --stop")
 		fmt.Println("Attendance processes and dedicated Chrome stopped. Logs and data preserved.")
 		return
 	}

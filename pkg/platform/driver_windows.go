@@ -118,8 +118,9 @@ func (d *windowsDriver) StartProcess(executable string, args []string, visible b
 }
 
 func (d *windowsDriver) StopAttendanceProcesses(profileDir string, debugPort int) error {
+	currPid := os.Getpid()
 	escapedProfile := strings.ReplaceAll(profileDir, "'", "''")
-	psCmd := fmt.Sprintf(`$profile='%s'; $owners=Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($p in $owners){ Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe' or Name = 'msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`, escapedProfile, debugPort)
+	psCmd := fmt.Sprintf(`$profile='%s'; Get-Process attendance -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne %d } | Stop-Process -Force -ErrorAction SilentlyContinue; $owners=Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($p in $owners){ Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe' or Name = 'msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`, escapedProfile, currPid, debugPort)
 
 	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psCmd)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
