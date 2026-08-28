@@ -157,6 +157,12 @@ func (d *windowsDriver) IsProcessRunning(pid int) bool {
 	return exitCode == STILL_ACTIVE
 }
 
+func (d *windowsDriver) KillProcess(pid int) error {
+	cmd := exec.Command("taskkill", "/PID", fmt.Sprintf("%d", pid), "/F")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Run()
+}
+
 func (d *windowsDriver) SendNotification(title, message string) error {
 	escapedTitle := strings.ReplaceAll(title, "'", "''")
 	escapedMsg := strings.ReplaceAll(message, "'", "''")

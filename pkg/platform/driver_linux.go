@@ -120,6 +120,17 @@ func (d *linuxDriver) IsProcessRunning(pid int) bool {
 	return process.Signal(syscall.Signal(0)) == nil
 }
 
+func (d *linuxDriver) KillProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	_ = process.Signal(syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	_ = process.Signal(syscall.SIGKILL)
+	return nil
+}
+
 func (d *linuxDriver) SendNotification(title, message string) error {
 	if _, err := exec.LookPath("notify-send"); err == nil {
 		return exec.Command("notify-send", "-a", "Attendance Automation", title, message).Start()

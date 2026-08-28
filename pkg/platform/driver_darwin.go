@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"attendance/pkg/core"
 )
@@ -120,6 +121,17 @@ func (d *darwinDriver) IsProcessRunning(pid int) bool {
 		return false
 	}
 	return process.Signal(syscall.Signal(0)) == nil
+}
+
+func (d *darwinDriver) KillProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	_ = process.Signal(syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	_ = process.Signal(syscall.SIGKILL)
+	return nil
 }
 
 func (d *darwinDriver) SendNotification(title, message string) error {

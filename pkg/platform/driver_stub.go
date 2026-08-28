@@ -60,6 +60,14 @@ func (d *stubDriver) IsProcessRunning(pid int) bool {
 	return err == nil && process != nil
 }
 
+func (d *stubDriver) KillProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return process.Kill()
+}
+
 func (d *stubDriver) SendNotification(title, message string) error {
 	core.Log("", fmt.Sprintf("[Notification] %s: %s", title, message))
 	return nil

@@ -154,9 +154,17 @@ func AcquireLock(dataDir string, driver PlatformDriver) (func(), error) {
 		oldPidStr := strings.TrimSpace(string(data))
 		if oldPid, err := strconv.Atoi(oldPidStr); err == nil && oldPid != pid {
 			if driver.IsProcessRunning(oldPid) {
-				return nil, fmt.Errorf("another attendance process is already running (PID: %d)", oldPid)
+				Log(dataDir, fmt.Sprintf("Existing attendance process running (PID: %d). Stopping previous instance to restart...", oldPid))
+				_ = driver.KillProcess(oldPid)
+				for i := 0; i < 15; i++ {
+					if !driver.IsProcessRunning(oldPid) {
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			} else {
+				Log(dataDir, fmt.Sprintf("Removing stale attendance lock for stopped process: %d", oldPid))
 			}
-			Log(dataDir, fmt.Sprintf("Removing stale attendance lock for stopped process: %d", oldPid))
 		}
 	}
 
