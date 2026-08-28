@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"attendance/pkg/core"
@@ -242,6 +243,7 @@ var (
 	pDrawTextW        = winUser32.NewProc("DrawTextW")
 	pRoundRect        = winGdi32.NewProc("RoundRect")
 	pTrackMouseEvent  = winUser32.NewProc("TrackMouseEvent")
+	pGetCursorPos     = winUser32.NewProc("GetCursorPos")
 
 	pGetModuleHandleW = winKernel32.NewProc("GetModuleHandleW")
 )
@@ -490,6 +492,36 @@ func (d *windowsDriver) ShowToast(ctx context.Context, cfg *core.Config, events 
 
 				if h != 0 {
 					pInvalidateRect.Call(h, 0, 1)
+				}
+			}
+		}
+	}()
+
+	// Reliable cursor polling for hover detection
+	go func() {
+		ticker := time.NewTicker(80 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				var pt struct{ X, Y int32 }
+				r, _, _ := pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+				if r != 0 {
+					wCx, _, _ := pGetSystemMetrics.Call(0)
+					hovered := pt.X >= int32(wCx)-260 && pt.Y >= 0 && pt.Y <= int32(height)+4
+					toastMu.Lock()
+					changed := hovered != isBadgeHovered
+					if changed {
+						isBadgeHovered = hovered
+					}
+					h := toastHwnd
+					toastMu.Unlock()
+
+					if changed && h != 0 {
+						pInvalidateRect.Call(h, 0, 1)
+					}
 				}
 			}
 		}

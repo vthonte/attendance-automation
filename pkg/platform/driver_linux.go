@@ -364,6 +364,27 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 		}
 	}()
 
+	// Query pointer position periodically for instant, reliable hover in WSLg / X11
+	go func() {
+		ticker := time.NewTicker(80 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				reply, err := xproto.QueryPointer(X, screen.Root).Reply()
+				if err == nil {
+					hovered := reply.RootX >= int16(width)-260 && reply.RootY >= 0 && reply.RootY <= int16(height)+4
+					if hovered != isBadgeHovered {
+						isBadgeHovered = hovered
+						drawToast()
+					}
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():

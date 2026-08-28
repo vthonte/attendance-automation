@@ -14,6 +14,7 @@ build-all: build-linux build-windows build-darwin-arm64 build-darwin-amd64
 build-linux:
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
+	@cp -f $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(BUILD_DIR)/$(BINARY_NAME)
 
 build-windows:
 	@mkdir -p $(BUILD_DIR)
