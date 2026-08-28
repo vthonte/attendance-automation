@@ -201,7 +201,7 @@ func (d *windowsDriver) InstallAutostart(cfg *core.Config) error {
 		return fmt.Errorf("could not determine Windows Startup folder path")
 	}
 
-	psScript := fmt.Sprintf(`$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%s'); $s.TargetPath = '%s'; $s.WorkingDirectory = '%s'; $s.Save()`,
+	psScript := fmt.Sprintf(`$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%s'); $s.TargetPath = '%s'; $s.Arguments = '--no-browser'; $s.WorkingDirectory = '%s'; $s.Save()`,
 		shortcutPath, exePath, cfg.BaseDir)
 
 	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)

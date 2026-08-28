@@ -33,6 +33,7 @@ func main() {
 	downloadBrowserFlag := flag.Bool("download-browser", false, "Download portable Chrome Headless Shell to data/browser/")
 	dashboardFlag := flag.Bool("dashboard", false, "Run web dashboard only")
 	dashboardPortFlag := flag.Int("dashboard-port", 9333, "Web dashboard port")
+	noBrowserFlag := flag.Bool("no-browser", false, "Do not automatically open the web UI in browser on launch")
 	versionFlag := flag.Bool("version", false, "Show version information")
 	configFlag := flag.String("config", "", "Custom path to config.txt")
 
@@ -56,6 +57,15 @@ func main() {
 	}
 
 	_ = core.EnsureConfigFile(cfg.ConfigFile)
+
+	// If launched with no specific command flags:
+	if !*onceFlag && !*statusFlag && !*toastFlag && !*stopFlag && !*setupFlag && !*installStartupFlag && !*uninstallStartupFlag && !*downloadBrowserFlag && !*dashboardFlag && !*versionFlag {
+		// If service is already running, open Web UI in default browser and exit immediately
+		if core.IsDashboardRunning(*dashboardPortFlag) {
+			_ = core.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d", *dashboardPortFlag))
+			return
+		}
+	}
 
 	// Command: --download-browser
 	if *downloadBrowserFlag {
@@ -186,6 +196,13 @@ func main() {
 	}
 
 	go core.StartWebDashboard(ctx, engine, *dashboardPortFlag)
+
+	if !*noBrowserFlag {
+		go func() {
+			time.Sleep(350 * time.Millisecond)
+			_ = core.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d", *dashboardPortFlag))
+		}()
+	}
 
 	if err := engine.Run(ctx); err != nil && err != context.Canceled {
 		core.Log(cfg.DataDir, fmt.Sprintf("Fatal daemon error: %v", err))

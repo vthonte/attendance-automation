@@ -172,6 +172,7 @@ func (d *darwinDriver) InstallAutostart(cfg *core.Config) error {
     <key>ProgramArguments</key>
     <array>
         <string>%s</string>
+        <string>--no-browser</string>
     </array>
     <key>WorkingDirectory</key>
     <string>%s</string>

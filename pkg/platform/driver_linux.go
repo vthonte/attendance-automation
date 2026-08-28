@@ -163,7 +163,7 @@ func (d *linuxDriver) InstallAutostart(cfg *core.Config) error {
 	content := fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=Attendance Automation
-Exec=%s
+Exec=%s --no-browser
 Path=%s
 Hidden=false
 NoDisplay=false
