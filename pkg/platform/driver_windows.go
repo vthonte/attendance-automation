@@ -355,6 +355,15 @@ func winWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		}
 		return 0
 
+	case 0x0202: // WM_LBUTTONUP
+		cx, _, _ := pGetSystemMetrics.Call(0)
+		x := int32(int16(lParam & 0xFFFF))
+		y := int32(int16((lParam >> 16) & 0xFFFF))
+		if x >= int32(cx)-260 && y <= 32 {
+			_ = core.OpenBrowser("http://127.0.0.1:9333")
+		}
+		return 0
+
 	case 0x02A3: // WM_MOUSELEAVE
 		isBadgeHovered = false
 		pInvalidateRect.Call(hwnd, 0, 1)

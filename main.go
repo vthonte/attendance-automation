@@ -33,6 +33,7 @@ func main() {
 	downloadBrowserFlag := flag.Bool("download-browser", false, "Download portable Chrome Headless Shell to data/browser/")
 	dashboardFlag := flag.Bool("dashboard", false, "Run web dashboard only")
 	dashboardPortFlag := flag.Int("dashboard-port", 9333, "Web dashboard port")
+	uiFlag := flag.Bool("ui", false, "Open web UI dashboard in default browser")
 	versionFlag := flag.Bool("version", false, "Show version information")
 	configFlag := flag.String("config", "", "Custom path to config.txt")
 
@@ -42,6 +43,12 @@ func main() {
 
 	if *versionFlag {
 		fmt.Printf("Attendance Automation v%s (%s/%s, Driver: %s)\n", Version, runtime.GOOS, runtime.GOARCH, driver.Name())
+		return
+	}
+
+	// Command: --ui (open web UI dashboard in browser)
+	if *uiFlag {
+		_ = core.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d", *dashboardPortFlag))
 		return
 	}
 
@@ -56,15 +63,6 @@ func main() {
 	}
 
 	_ = core.EnsureConfigFile(cfg.ConfigFile)
-
-	// If launched with no specific command flags:
-	if !*onceFlag && !*statusFlag && !*toastFlag && !*stopFlag && !*setupFlag && !*installStartupFlag && !*uninstallStartupFlag && !*downloadBrowserFlag && !*dashboardFlag && !*versionFlag {
-		// If service is already running, open Web UI in default browser and exit immediately
-		if core.IsDashboardRunning(*dashboardPortFlag) {
-			_ = core.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d", *dashboardPortFlag))
-			return
-		}
-	}
 
 	// Command: --download-browser
 	if *downloadBrowserFlag {

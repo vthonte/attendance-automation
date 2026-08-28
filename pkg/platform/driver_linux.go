@@ -242,7 +242,8 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 			xproto.EventMaskStructureNotify |
 			xproto.EventMaskEnterWindow |
 			xproto.EventMaskLeaveWindow |
-			xproto.EventMaskPointerMotion,
+			xproto.EventMaskPointerMotion |
+			xproto.EventMaskButtonRelease,
 	)
 
 	mask := uint32(xproto.CwBackPixel | xproto.CwOverrideRedirect | xproto.CwEventMask)
@@ -429,6 +430,11 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 		switch e := ev.(type) {
 		case xproto.ExposeEvent:
 			drawToast()
+
+		case xproto.ButtonReleaseEvent:
+			if e.EventX >= int16(width)-260 && e.EventY <= 32 {
+				_ = core.OpenBrowser("http://127.0.0.1:9333")
+			}
 
 		case xproto.EnterNotifyEvent:
 			if e.EventX >= int16(width)-260 && e.EventY <= 32 {
