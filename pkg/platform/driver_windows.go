@@ -303,6 +303,7 @@ var (
 	toastText       string
 	toastColorName  string
 	toastBarVisible bool = true
+	toastBarHeight  int  = 2
 	toastHwnd       uintptr
 	isBadgeHovered  bool
 	toastMu         sync.Mutex
@@ -369,14 +370,19 @@ func winWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			text := toastText
 			colName := toastColorName
 			barVis := toastBarVisible
+			barH := int32(toastBarHeight)
 			toastMu.Unlock()
+
+			if barH <= 0 {
+				barH = 2
+			}
 
 			if barVis {
 				var barRc RECT
 				barRc.Left = 0
 				barRc.Top = 0
 				barRc.Right = int32(cx)
-				barRc.Bottom = 3
+				barRc.Bottom = barH
 
 				barColor := winColorRefFromName(colName)
 				barBrush, _, _ := pCreateSolidBrush.Call(uintptr(barColor))
@@ -476,10 +482,18 @@ func (d *windowsDriver) ShowToast(ctx context.Context, cfg *core.Config, events 
 	toastMu.Lock()
 	toastHwnd = hwnd
 	toastBarVisible = cfg.ShowToastUI
+	if cfg.BarHeight > 0 {
+		toastBarHeight = cfg.BarHeight
+	}
 	toastMu.Unlock()
 
+	initH := uintptr(cfg.BarHeight)
+	if initH <= 0 {
+		initH = 2
+	}
+
 	pSetLayeredWindowAttributes.Call(hwnd, 0x00000000, 0, 1) // LWA_COLORKEY = 1
-	pSetWindowPos.Call(hwnd, ^uintptr(0), 0, 0, cx, height, 0x0040|0x0010)
+	pSetWindowPos.Call(hwnd, ^uintptr(0), 0, 0, cx, initH, 0x0040|0x0010)
 	pShowWindow.Call(hwnd, 4)
 	pUpdateWindow.Call(hwnd)
 
@@ -524,10 +538,14 @@ func (d *windowsDriver) ShowToast(ctx context.Context, cfg *core.Config, events 
 						isBadgeHovered = hovered
 					}
 					h := toastHwnd
+					bHeight := toastBarHeight
 					toastMu.Unlock()
 
 					if changed && h != 0 {
-						curH := uintptr(3)
+						curH := uintptr(bHeight)
+						if curH <= 0 {
+							curH = 2
+						}
 						if isBadgeHovered && toastText != "" && cfg.ShowLoggedDate {
 							curH = height
 						}

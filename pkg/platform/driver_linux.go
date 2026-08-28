@@ -329,8 +329,13 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 			colorPixel = 0xD3D3D3
 		}
 
+		barH := uint32(cfg.BarHeight)
+		if barH <= 0 {
+			barH = 2
+		}
+
 		if currentEv.BarVisible {
-			currentHeight := uint32(3)
+			currentHeight := barH
 			if isBadgeHovered && currentEv.DisplayText != "" && cfg.ShowLoggedDate {
 				currentHeight = uint32(height)
 			}
@@ -341,9 +346,9 @@ func (d *linuxDriver) ShowToast(ctx context.Context, cfg *core.Config, events <-
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{screen.BlackPixel})
 			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: 0, Y: 0, Width: width, Height: uint16(currentHeight)}})
 
-			// Draw 3px colored bar at the very top
+			// Draw colored bar at the very top
 			_ = xproto.ChangeGC(X, gc, xproto.GcForeground, []uint32{colorPixel})
-			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: 0, Y: 0, Width: width, Height: 3}})
+			_ = xproto.PolyFillRectangle(X, xproto.Drawable(win), gc, []xproto.Rectangle{{X: 0, Y: 0, Width: width, Height: uint16(barH)}})
 		}
 
 		// Draw badge ONLY when hovered over the top right area

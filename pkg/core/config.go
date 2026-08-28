@@ -40,6 +40,7 @@ type Config struct {
 	ShowToastUI                     bool          `json:"show_toast_ui"`
 	ShowLoggedDate                  bool          `json:"show_logged_date"`
 	ToastHeight                     int           `json:"toast_height"`
+	BarHeight                       int           `json:"bar_height"`
 	DisableChromeBackgroundServices bool          `json:"disable_chrome_background_services"`
 	DisableAllUI                    bool          `json:"disable_all_ui"`
 	ChromeVisible                   bool          `json:"chrome_visible"`
@@ -197,6 +198,7 @@ func LoadConfig() (*Config, error) {
 		ShowToastUI:                     parseBool(values["SHOW_TOAST_UI"], true),
 		ShowLoggedDate:                  parseBool(values["SHOW_LOGGED_DATE"], true),
 		ToastHeight:                     parseInt(values["TOAST_HEIGHT"], 32),
+		BarHeight:                       parseInt(values["BAR_HEIGHT"], 2),
 		DisableChromeBackgroundServices: parseBool(values["DISABLE_CHROME_BACKGROUND_SERVICES"], true),
 		DisableAllUI:                    parseBool(values["DISABLE_ALL_UI"], false),
 		ChromeVisible:                   parseBool(values["CHROME_VISIBLE"], false),
@@ -226,6 +228,8 @@ START_WITH_WINDOWS=true
 STARTUP_SHORTCUT_NAME=Attendance Automation
 SHOW_TOAST_UI=true
 SHOW_LOGGED_DATE=true
+# Thickness of the status line at the very top of screen in pixels (e.g. 1, 2, 3)
+BAR_HEIGHT=2
 TOAST_HEIGHT=32
 DISABLE_CHROME_BACKGROUND_SERVICES=true
 DISABLE_ALL_UI=false
