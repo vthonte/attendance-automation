@@ -20,6 +20,8 @@ import (
 const Version = "2.0.0 (Go Native Single-Binary)"
 
 func main() {
+	platform.AttachParentConsole()
+
 	onceFlag := flag.Bool("once", false, "Run a single attendance check and exit")
 	statusFlag := flag.Bool("status", false, "Show current attendance status and configuration")
 	toastFlag := flag.Bool("toast", false, "Run only the status toast overlay window")

@@ -241,9 +241,17 @@ var (
 	pSetBkMode        = winGdi32.NewProc("SetBkMode")
 	pDrawTextW        = winUser32.NewProc("DrawTextW")
 	pRoundRect        = winGdi32.NewProc("RoundRect")
+	pTrackMouseEvent  = winUser32.NewProc("TrackMouseEvent")
 
 	pGetModuleHandleW = winKernel32.NewProc("GetModuleHandleW")
 )
+
+type TRACKMOUSEEVENT struct {
+	CbSize      uint32
+	DwFlags     uint32
+	HwndTrack   uintptr
+	DwHoverTime uint32
+}
 
 type WNDCLASSEXW struct {
 	CbSize        uint32
@@ -287,6 +295,7 @@ var (
 	toastColorName  string
 	toastBarVisible bool = true
 	toastHwnd       uintptr
+	isBadgeHovered  bool
 	toastMu         sync.Mutex
 )
 
@@ -306,7 +315,31 @@ func winColorRefFromName(name string) uint32 {
 func winWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case 0x0084: // WM_NCHITTEST
+		x := int32(int16(lParam & 0xFFFF))
+		y := int32(int16((lParam >> 16) & 0xFFFF))
+		cx, _, _ := pGetSystemMetrics.Call(0)
+		if x >= int32(cx)-260 && y <= 32 {
+			return 1 // HTCLIENT (allow mouse events on badge)
+		}
 		return ^uintptr(0) // HTTRANSPARENT (-1)
+
+	case 0x0200: // WM_MOUSEMOVE
+		if !isBadgeHovered {
+			isBadgeHovered = true
+			pInvalidateRect.Call(hwnd, 0, 1)
+
+			var tme TRACKMOUSEEVENT
+			tme.CbSize = uint32(unsafe.Sizeof(tme))
+			tme.DwFlags = 0x00000002 // TME_LEAVE
+			tme.HwndTrack = hwnd
+			pTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
+		}
+		return 0
+
+	case 0x02A3: // WM_MOUSELEAVE
+		isBadgeHovered = false
+		pInvalidateRect.Call(hwnd, 0, 1)
+		return 0
 
 	case 0x000F: // WM_PAINT
 		var ps PAINTSTRUCT
@@ -342,7 +375,8 @@ func winWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 				pDeleteObject.Call(barBrush)
 			}
 
-			if text != "" {
+			// Date badge is ONLY drawn when hovered over the top right
+			if text != "" && isBadgeHovered {
 				badgeWidth := int32(len(text)*7 + 20)
 				if badgeWidth < 90 {
 					badgeWidth = 90
