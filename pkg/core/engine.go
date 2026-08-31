@@ -218,19 +218,31 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		_ = e.Driver.StopAttendanceProcesses(profileDir, e.Cfg.DebugPort)
 
 		Log(e.Cfg.DataDir, "Clock-in needs manual attention; opening browser window...")
-		manualArgs := []string{
-			fmt.Sprintf("--user-data-dir=%s", profileDir),
-			fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
-			"--new-window",
-			"--disable-background-mode",
-			"--no-first-run",
-			"--no-default-browser-check",
-			e.Cfg.AttendanceURL,
+
+		var launched bool
+		if !strings.Contains(strings.ToLower(browserPath), "headless") {
+			manualArgs := []string{
+				fmt.Sprintf("--user-data-dir=%s", profileDir),
+				fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
+				"--new-window",
+				"--disable-background-mode",
+				"--no-first-run",
+				"--no-default-browser-check",
+				e.Cfg.AttendanceURL,
+			}
+			if _, err := e.Driver.StartProcess(browserPath, manualArgs, true); err == nil {
+				launched = true
+				time.Sleep(1 * time.Second)
+				_ = e.Driver.FocusBrowser()
+			}
 		}
-		_, _ = e.Driver.StartProcess(browserPath, manualArgs, true)
-		time.Sleep(1 * time.Second)
-		_ = e.Driver.FocusBrowser()
-		_ = e.Driver.SendNotification("Attendance Automation", "Manual attention required: Please check Chrome window")
+
+		if !launched {
+			Log(e.Cfg.DataDir, fmt.Sprintf("Opening attendance page in default browser: %s", e.Cfg.AttendanceURL))
+			_ = OpenBrowser(e.Cfg.AttendanceURL)
+		}
+
+		_ = e.Driver.SendNotification("Attendance Automation", "Manual attention required: Please check browser window")
 		keepManualOpen = true
 		return e.Cfg.ManualAttentionInterval, nil
 

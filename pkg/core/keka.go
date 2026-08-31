@@ -140,26 +140,51 @@ const kekaClockInScript = `
     return JSON.stringify({ state: 'error', message: 'Clock-in button vanished' });
   }
 
-  // Click clock-in
+  // Click initial clock-in button
   targetBtn.click();
   await sleep(1500);
 
-  // Look for confirm / submit button in popup modal
-  let submitBtn = document.querySelector("button.btn-primary.btn-sm") ||
-                  document.querySelector(".modal-footer button.btn-primary") ||
-                  document.querySelector("button.btn-primary");
+  // 1. Check if a confirmation modal / dialog is open
+  const modal = document.querySelector('.modal, .modal-dialog, modal-container, bs-modal-container, [role="dialog"], ngb-modal-window');
+  if (modal) {
+    const modalButtons = Array.from(modal.querySelectorAll('button, input[type="submit"], a.btn'));
+    
+    // Find action buttons (exclude Cancel, Close, Dismiss)
+    const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test(b.textContent.trim()));
 
-  if (!submitBtn) {
-    submitBtn = findByText('^(?:Submit|Confirm|Clock\\s*In|Save|Proceed|Yes|OK)$', 'button');
+    let confirmBtn = actionButtons.find(b =>
+      b.classList.contains('btn-primary') ||
+      b.getAttribute('type') === 'submit' ||
+      /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test(b.textContent.trim())
+    );
+
+    if (!confirmBtn && actionButtons.length > 0) {
+      confirmBtn = actionButtons[actionButtons.length - 1]; // usually last button is primary action
+    }
+
+    if (confirmBtn) {
+      confirmBtn.click();
+      await sleep(2000);
+    }
   }
 
-  if (submitBtn) {
-    submitBtn.click();
-    await sleep(2000);
-    return JSON.stringify({ state: 'success', message: 'Submitted clock-in successfully' });
+  // 2. Verify clock-in outcome
+  await sleep(1000);
+  const clockOutNow = findByText('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
+  if (clockOutNow) {
+    return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
 
-  return JSON.stringify({ state: 'error', message: 'Submit button not found in modal' });
+  // Check if modal has closed
+  const stillOpenModal = document.querySelector('.modal.show, modal-container, ngb-modal-window');
+  if (!stillOpenModal) {
+    return JSON.stringify({ state: 'success', message: 'Clock-in submitted successfully' });
+  }
+
+  const errorEl = stillOpenModal.querySelector('.text-danger, .alert-danger, .error-message, .validation-message');
+  const errorText = errorEl ? errorEl.textContent.trim() : 'Confirmation modal remained open';
+
+  return JSON.stringify({ state: 'error', message: errorText });
 })()
 `
 
