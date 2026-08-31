@@ -40,6 +40,12 @@ func (d *darwinDriver) FindBrowser(cfg *core.Config) (string, error) {
 		}
 	}
 
+	// 1. Prefer real system GUI browsers (Chrome, Edge, Brave, Chromium) for unified cookie & login persistence
+	if gui, err := d.FindGUIBrowser(cfg); err == nil {
+		return gui, nil
+	}
+
+	// 2. Portable fallback
 	portableDir := filepath.Join(cfg.DataDir, "browser")
 	portableCandidates := []string{
 		"Google Chrome.app/Contents/MacOS/Google Chrome",

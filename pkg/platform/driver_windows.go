@@ -44,6 +44,12 @@ func (d *windowsDriver) FindBrowser(cfg *core.Config) (string, error) {
 		}
 	}
 
+	// 1. Prefer real system GUI browsers (Chrome, Edge, Brave) so the exact same browser & cookies are used for both automated and manual modes
+	if gui, err := d.FindGUIBrowser(cfg); err == nil {
+		return gui, nil
+	}
+
+	// 2. Portable headless fallback if no system browser is found
 	portableDir := filepath.Join(cfg.DataDir, "browser")
 	portableCandidates := []string{
 		"chrome.exe",
