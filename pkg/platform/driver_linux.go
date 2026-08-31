@@ -84,6 +84,39 @@ func (d *linuxDriver) FindBrowser(cfg *core.Config) (string, error) {
 	return "", fmt.Errorf("no Chromium browser found. Run 'attendance --download-browser' or configure CHROME_PATH in %s", cfg.ConfigFile)
 }
 
+func (d *linuxDriver) FindGUIBrowser(cfg *core.Config) (string, error) {
+	if cfg.ChromePath != "" && !strings.Contains(strings.ToLower(cfg.ChromePath), "headless") {
+		if _, err := os.Stat(cfg.ChromePath); err == nil {
+			return cfg.ChromePath, nil
+		}
+	}
+
+	candidates := []string{
+		"/usr/bin/google-chrome",
+		"/usr/bin/google-chrome-stable",
+		"/usr/bin/chromium",
+		"/usr/bin/chromium-browser",
+		"/usr/bin/microsoft-edge",
+		"/usr/bin/microsoft-edge-stable",
+		"/usr/bin/brave-browser",
+		"/snap/bin/chromium",
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
+	for _, name := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p, nil
+		}
+	}
+
+	return "", fmt.Errorf("no GUI Chromium browser found on system")
+}
+
 func (d *linuxDriver) StartProcess(executable string, args []string, visible bool) (*core.ProcessHandle, error) {
 	cmd := exec.Command(executable, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{

@@ -220,7 +220,8 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		Log(e.Cfg.DataDir, "Clock-in needs manual attention; opening browser window...")
 
 		var launched bool
-		if !strings.Contains(strings.ToLower(browserPath), "headless") {
+		guiBrowser, err := e.Driver.FindGUIBrowser(e.Cfg)
+		if err == nil {
 			manualArgs := []string{
 				fmt.Sprintf("--user-data-dir=%s", profileDir),
 				fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
@@ -230,10 +231,13 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 				"--no-default-browser-check",
 				e.Cfg.AttendanceURL,
 			}
-			if _, err := e.Driver.StartProcess(browserPath, manualArgs, true); err == nil {
+			Log(e.Cfg.DataDir, fmt.Sprintf("Launching GUI browser for login (%s) with shared profile: %s", guiBrowser, profileDir))
+			if _, err := e.Driver.StartProcess(guiBrowser, manualArgs, true); err == nil {
 				launched = true
 				time.Sleep(1 * time.Second)
 				_ = e.Driver.FocusBrowser()
+			} else {
+				Log(e.Cfg.DataDir, fmt.Sprintf("GUI browser launch error: %v", err))
 			}
 		}
 

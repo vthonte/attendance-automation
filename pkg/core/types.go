@@ -12,6 +12,7 @@ type ProcessHandle struct {
 type PlatformDriver interface {
 	Name() string
 	FindBrowser(cfg *Config) (string, error)
+	FindGUIBrowser(cfg *Config) (string, error)
 	GetDebugProfileDir(baseDir string) string
 	StartProcess(cmd string, args []string, visible bool) (*ProcessHandle, error)
 	StopAttendanceProcesses(profileDir string, debugPort int) error

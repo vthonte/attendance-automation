@@ -39,6 +39,10 @@ func (d *stubDriver) FindBrowser(cfg *core.Config) (string, error) {
 	return "", fmt.Errorf("no browser found")
 }
 
+func (d *stubDriver) FindGUIBrowser(cfg *core.Config) (string, error) {
+	return d.FindBrowser(cfg)
+}
+
 func (d *stubDriver) StartProcess(executable string, args []string, visible bool) (*core.ProcessHandle, error) {
 	cmd := exec.Command(executable, args...)
 	if err := cmd.Start(); err != nil {

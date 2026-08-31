@@ -101,6 +101,55 @@ func (d *windowsDriver) FindBrowser(cfg *core.Config) (string, error) {
 	return "", fmt.Errorf("no Chromium browser found. Run 'attendance --download-browser' or configure CHROME_PATH in %s", cfg.ConfigFile)
 }
 
+func (d *windowsDriver) FindGUIBrowser(cfg *core.Config) (string, error) {
+	if cfg.ChromePath != "" && !strings.Contains(strings.ToLower(cfg.ChromePath), "headless") {
+		if _, err := os.Stat(cfg.ChromePath); err == nil {
+			return cfg.ChromePath, nil
+		}
+	}
+
+	localAppData := os.Getenv("LOCALAPPDATA")
+	progFiles := os.Getenv("ProgramFiles")
+	progFilesX86 := os.Getenv("ProgramFiles(x86)")
+
+	var candidates []string
+	if localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(localAppData, "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+		)
+	}
+	if progFiles != "" {
+		candidates = append(candidates,
+			filepath.Join(progFiles, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(progFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(progFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+		)
+	}
+	if progFilesX86 != "" {
+		candidates = append(candidates,
+			filepath.Join(progFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(progFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(progFilesX86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+		)
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
+	for _, name := range []string{"chrome.exe", "msedge.exe", "brave.exe", "chromium.exe"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p, nil
+		}
+	}
+
+	return "", fmt.Errorf("no GUI Chromium browser found on system")
+}
+
 func (d *windowsDriver) StartProcess(executable string, args []string, visible bool) (*core.ProcessHandle, error) {
 	cmd := exec.Command(executable, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{

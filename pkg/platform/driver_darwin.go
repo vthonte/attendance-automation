@@ -86,6 +86,44 @@ func (d *darwinDriver) FindBrowser(cfg *core.Config) (string, error) {
 	return "", fmt.Errorf("no Chromium browser found. Run 'attendance --download-browser' or configure CHROME_PATH in %s", cfg.ConfigFile)
 }
 
+func (d *darwinDriver) FindGUIBrowser(cfg *core.Config) (string, error) {
+	if cfg.ChromePath != "" && !strings.Contains(strings.ToLower(cfg.ChromePath), "headless") {
+		if _, err := os.Stat(cfg.ChromePath); err == nil {
+			return cfg.ChromePath, nil
+		}
+	}
+
+	home := os.Getenv("HOME")
+	candidates := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+	}
+	if home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, "Applications", "Google Chrome.app", "Contents", "MacOS", "Google Chrome"),
+			filepath.Join(home, "Applications", "Microsoft Edge.app", "Contents", "MacOS", "Microsoft Edge"),
+			filepath.Join(home, "Applications", "Brave Browser.app", "Contents", "MacOS", "Brave Browser"),
+			filepath.Join(home, "Applications", "Chromium.app", "Contents", "MacOS", "Chromium"),
+		)
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+
+	for _, name := range []string{"google-chrome", "chromium", "brave"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p, nil
+		}
+	}
+
+	return "", fmt.Errorf("no GUI Chromium browser found on system")
+}
+
 func (d *darwinDriver) StartProcess(executable string, args []string, visible bool) (*core.ProcessHandle, error) {
 	cmd := exec.Command(executable, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
