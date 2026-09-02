@@ -202,15 +202,41 @@ func (d *windowsDriver) IsGUIBrowserOpen(profileDir string) bool {
 	return err == nil && len(strings.TrimSpace(string(out))) > 0
 }
 
+var (
+	shell32DLL     = syscall.NewLazyDLL("shell32.dll")
+	pShellExecuteW = shell32DLL.NewProc("ShellExecuteW")
+)
+
 func (d *windowsDriver) LaunchGUIBrowser(executable string, args []string) error {
 	var quotedArgs []string
 	for _, a := range args {
-		quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
+		if strings.Contains(a, " ") {
+			quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
+		} else {
+			quotedArgs = append(quotedArgs, a)
+		}
 	}
-	startCmd := fmt.Sprintf(`start "" "%s" %s`, executable, strings.Join(quotedArgs, " "))
-	cmd := exec.Command("cmd.exe", "/c", startCmd)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Start()
+	params := strings.Join(quotedArgs, " ")
+
+	lpVerb, _ := syscall.UTF16PtrFromString("open")
+	lpFile, _ := syscall.UTF16PtrFromString(executable)
+	lpParameters, _ := syscall.UTF16PtrFromString(params)
+	lpDirectory, _ := syscall.UTF16PtrFromString("")
+
+	ret, _, _ := pShellExecuteW.Call(
+		0,
+		uintptr(unsafe.Pointer(lpVerb)),
+		uintptr(unsafe.Pointer(lpFile)),
+		uintptr(unsafe.Pointer(lpParameters)),
+		uintptr(unsafe.Pointer(lpDirectory)),
+		uintptr(1), // SW_SHOWNORMAL
+	)
+
+	if ret <= 32 {
+		cmd := exec.Command(executable, args...)
+		return cmd.Start()
+	}
+	return nil
 }
 
 func (d *windowsDriver) FocusBrowser() error {
