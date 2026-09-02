@@ -246,14 +246,14 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 				fmt.Sprintf("--user-data-dir=%s", profileDir),
 				fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
 				"--new-window",
+				"--disable-background-mode",
 				"--no-first-run",
-				"--no-default-browser-check",
 				e.Cfg.AttendanceURL,
 			}
 			Log(e.Cfg.DataDir, fmt.Sprintf("Launching GUI browser for login (%s) with shared profile: %s", guiBrowser, profileDir))
 			if err := e.Driver.LaunchGUIBrowser(guiBrowser, manualArgs); err == nil {
 				launched = true
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(1 * time.Second)
 				_ = e.Driver.FocusBrowser()
 			} else {
 				Log(e.Cfg.DataDir, fmt.Sprintf("GUI browser launch error: %v", err))

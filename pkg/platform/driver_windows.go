@@ -182,80 +182,36 @@ func (d *windowsDriver) StartProcess(executable string, args []string, visible b
 
 func (d *windowsDriver) StopAttendanceProcesses(profileDir string, debugPort int) error {
 	currPid := os.Getpid()
+	escapedProfile := strings.ReplaceAll(profileDir, `'`, `''`)
 
-	// Instant taskkill for any other attendance.exe instances (< 5ms)
-	cmd1 := exec.Command("cmd.exe", "/c", fmt.Sprintf("taskkill /F /IM attendance.exe /FI \"PID ne %d\" 2>nul", currPid))
-	cmd1.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = cmd1.Run()
-
-	// Kill any browser process holding the debug port
-	cmd2 := exec.Command("cmd.exe", "/c", fmt.Sprintf(`for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":%d " ^| findstr "LISTENING"') do taskkill /F /PID %%a /T 2>nul`, debugPort))
-	cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = cmd2.Run()
-
-	// Kill any lingering headless Chrome or Edge on debug profile
-	cmd3 := exec.Command("cmd.exe", "/c", `wmic process where "name='chrome.exe' and commandline like '%--headless%'" call terminate 2>nul & wmic process where "name='msedge.exe' and commandline like '%--headless%'" call terminate 2>nul`)
-	cmd3.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = cmd3.Run()
-
+	// Match proven platform.js PowerShell process termination
+	psScript := fmt.Sprintf(`$profile='%s'; $currPid=%d; Get-CimInstance Win32_Process -Filter "Name = 'attendance.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $currPid } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; $owners=Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($ownerPid in $owners){ Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe' or Name = 'msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + $profile + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`, escapedProfile, currPid, debugPort)
+	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd.Run()
 	return nil
 }
 
 func (d *windowsDriver) IsGUIBrowserOpen(profileDir string) bool {
-	cmd := exec.Command("cmd.exe", "/c", `wmic process where "name='chrome.exe' or name='msedge.exe'" get commandline 2>nul | findstr /I "ChromeDebug"`)
+	escapedProfile := strings.ReplaceAll(profileDir, `'`, `''`)
+	psScript := fmt.Sprintf(`$found = Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe' or Name = 'msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ('*' + '%s' + '*') -and $_.CommandLine -notlike '*--headless*' }; if ($found) { Write-Output 'OPEN' }`, escapedProfile)
+	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.Output()
-	return err == nil && len(strings.TrimSpace(string(out))) > 0
+	return err == nil && strings.Contains(string(out), "OPEN")
 }
 
-var (
-	shell32DLL     = syscall.NewLazyDLL("shell32.dll")
-	pShellExecuteW = shell32DLL.NewProc("ShellExecuteW")
-)
-
 func (d *windowsDriver) LaunchGUIBrowser(executable string, args []string) error {
-	var quotedArgs []string
+	var argList []string
 	for _, a := range args {
-		if strings.Contains(a, " ") || strings.Contains(a, "=") {
-			if strings.HasPrefix(a, "--") && strings.Contains(a, "=") {
-				parts := strings.SplitN(a, "=", 2)
-				quotedArgs = append(quotedArgs, fmt.Sprintf(`%s="%s"`, parts[0], parts[1]))
-			} else {
-				quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
-			}
-		} else {
-			quotedArgs = append(quotedArgs, a)
-		}
+		escaped := strings.ReplaceAll(a, `'`, `''`)
+		argList = append(argList, fmt.Sprintf(`'%s'`, escaped))
 	}
-	params := strings.Join(quotedArgs, " ")
-
-	lpFile, _ := syscall.UTF16PtrFromString(executable)
-	lpParameters, _ := syscall.UTF16PtrFromString(params)
-	var lpDir *uint16
-	if dir := filepath.Dir(executable); dir != "" {
-		lpDir, _ = syscall.UTF16PtrFromString(dir)
-	}
-
-	ret, _, _ := pShellExecuteW.Call(
-		0,
-		0,
-		uintptr(unsafe.Pointer(lpFile)),
-		uintptr(unsafe.Pointer(lpParameters)),
-		uintptr(unsafe.Pointer(lpDir)),
-		uintptr(1), // SW_SHOWNORMAL
-	)
-
-	if ret <= 32 {
-		cmd := exec.Command(executable, args...)
-		cmd.Dir = filepath.Dir(executable)
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
-		}
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("ShellExecuteW failed (code %d) and exec failed: %w", ret, err)
-		}
-	}
-	return nil
+	argsJoined := strings.Join(argList, ", ")
+	psScript := fmt.Sprintf(`Start-Process -FilePath '%s' -ArgumentList @(%s)`, strings.ReplaceAll(executable, `'`, `''`), argsJoined)
+	cmd := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Run()
 }
 
 func (d *windowsDriver) FocusBrowser() error {
