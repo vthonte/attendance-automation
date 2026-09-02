@@ -210,31 +210,44 @@ var (
 func (d *windowsDriver) LaunchGUIBrowser(executable string, args []string) error {
 	var quotedArgs []string
 	for _, a := range args {
-		if strings.Contains(a, " ") {
-			quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
+		if strings.Contains(a, " ") || strings.Contains(a, "=") {
+			if strings.HasPrefix(a, "--") && strings.Contains(a, "=") {
+				parts := strings.SplitN(a, "=", 2)
+				quotedArgs = append(quotedArgs, fmt.Sprintf(`%s="%s"`, parts[0], parts[1]))
+			} else {
+				quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
+			}
 		} else {
 			quotedArgs = append(quotedArgs, a)
 		}
 	}
 	params := strings.Join(quotedArgs, " ")
 
-	lpVerb, _ := syscall.UTF16PtrFromString("open")
 	lpFile, _ := syscall.UTF16PtrFromString(executable)
 	lpParameters, _ := syscall.UTF16PtrFromString(params)
-	lpDirectory, _ := syscall.UTF16PtrFromString("")
+	var lpDir *uint16
+	if dir := filepath.Dir(executable); dir != "" {
+		lpDir, _ = syscall.UTF16PtrFromString(dir)
+	}
 
 	ret, _, _ := pShellExecuteW.Call(
 		0,
-		uintptr(unsafe.Pointer(lpVerb)),
+		0,
 		uintptr(unsafe.Pointer(lpFile)),
 		uintptr(unsafe.Pointer(lpParameters)),
-		uintptr(unsafe.Pointer(lpDirectory)),
+		uintptr(unsafe.Pointer(lpDir)),
 		uintptr(1), // SW_SHOWNORMAL
 	)
 
 	if ret <= 32 {
 		cmd := exec.Command(executable, args...)
-		return cmd.Start()
+		cmd.Dir = filepath.Dir(executable)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
+		}
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("ShellExecuteW failed (code %d) and exec failed: %w", ret, err)
+		}
 	}
 	return nil
 }
