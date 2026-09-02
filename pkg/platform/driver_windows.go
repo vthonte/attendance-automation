@@ -157,10 +157,16 @@ func (d *windowsDriver) FindGUIBrowser(cfg *core.Config) (string, error) {
 
 func (d *windowsDriver) StartProcess(executable string, args []string, visible bool) (*core.ProcessHandle, error) {
 	cmd := exec.Command(executable, args...)
+	cmd.Dir = filepath.Dir(executable)
 	if !visible {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			CreationFlags: 0x00000200, // CREATE_NEW_PROCESS_GROUP
 			HideWindow:    true,
+		}
+	} else {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
+			HideWindow:    false,
 		}
 	}
 

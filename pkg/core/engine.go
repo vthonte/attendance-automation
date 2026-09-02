@@ -175,6 +175,8 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 				"--disable-sync",
 			)
 		}
+	} else {
+		args = append(args, "--new-window", "--start-maximized")
 	}
 	args = append(args, e.Cfg.AttendanceURL)
 
