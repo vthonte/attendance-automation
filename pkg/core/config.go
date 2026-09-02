@@ -165,7 +165,11 @@ func LoadConfig() (*Config, error) {
 	}
 
 	checkIntervalMs := parseInt(values["CHECK_INTERVAL_MS"], 60000)
-	manualAttentionMs := parseInt(values["MANUAL_ATTENTION_INTERVAL_MS"], 150000)
+	manualAttentionMs := parseInt(values["MANUAL_ATTENTION_INTERVAL_MS"], 0)
+	if manualAttentionMs <= 0 {
+		manualSec := parseInt(values["MANUAL_ATTENTION_INTERVAL_SECONDS"], 60)
+		manualAttentionMs = manualSec * 1000
+	}
 	clockInTimeoutMs := parseInt(values["CLOCK_IN_CONTROL_TIMEOUT_MS"], 30000)
 	clockOutTimeoutMs := parseInt(values["CLOCK_OUT_CONTROL_TIMEOUT_MS"], 15000)
 	cdpTimeoutMs := parseInt(values["CDP_CONNECT_TIMEOUT_MS"], 120000)
@@ -225,7 +229,7 @@ CLOCK_IN_MODE=web
 SKIP_CHECK_FROM=00:00
 SKIP_CHECK_UNTIL=08:00
 CHECK_INTERVAL_MS=60000
-MANUAL_ATTENTION_INTERVAL_MS=150000
+MANUAL_ATTENTION_INTERVAL_MS=60000
 CLOCK_IN_CONTROL_TIMEOUT_MS=30000
 CLOCK_OUT_CONTROL_TIMEOUT_MS=15000
 CDP_CONNECT_TIMEOUT_MS=120000

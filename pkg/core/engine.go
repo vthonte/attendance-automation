@@ -4,16 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Engine struct {
-	Cfg         *Config
-	Driver      PlatformDriver
-	EventBus    *EventBus
-	triggerChan chan struct{}
+	Cfg           *Config
+	Driver        PlatformDriver
+	EventBus      *EventBus
+	triggerChan   chan struct{}
+	manualProcess *ProcessHandle
 }
 
 func NewEngine(cfg *Config, driver PlatformDriver) *Engine {
@@ -108,6 +110,13 @@ func (e *Engine) SleepUntilNextCheck(ctx context.Context, delay time.Duration, p
 	}
 }
 
+func cleanProfileLocks(profileDir string) {
+	_ = os.Remove(filepath.Join(profileDir, "SingletonLock"))
+	_ = os.Remove(filepath.Join(profileDir, "SingletonSocket"))
+	_ = os.Remove(filepath.Join(profileDir, "SingletonCookie"))
+	_ = os.Remove(filepath.Join(profileDir, "lockfile"))
+}
+
 func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 	quietDelay := e.QuietWindowDelay(time.Now())
 	if quietDelay > 0 {
@@ -123,6 +132,38 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		return e.Cfg.CheckInterval, nil
 	}
 
+	profileDir := e.Driver.GetDebugProfileDir(e.Cfg.BaseDir)
+	_ = os.MkdirAll(profileDir, 0755)
+
+	// If a manual login browser was opened, check if it is still running
+	if e.manualProcess != nil && e.Driver.IsProcessRunning(e.manualProcess.Pid) {
+		Log(e.Cfg.DataDir, fmt.Sprintf("Manual login browser is currently open (PID %d). Inspecting session...", e.manualProcess.Pid))
+
+		// Try to connect via CDP on debug port to see if user logged in
+		cdpCtx, cancelCDP := context.WithTimeout(ctx, 4*time.Second)
+		client, err := ConnectCDP(cdpCtx, e.Cfg.DebugHost, e.Cfg.DebugPort)
+		cancelCDP()
+		if err == nil {
+			defer client.Close()
+			res, err := PerformKekaCheckAndClockIn(ctx, client, e.Cfg)
+			if err == nil && (res == ResultAlreadyClockedIn || res == ResultClockedIn) {
+				_ = MarkLoggedToday(e.Cfg.DataDir)
+				e.emitStatus("in")
+				_ = e.Driver.SendNotification("Attendance Automation", "Successfully clocked in for today!")
+				_ = e.Driver.KillProcess(e.manualProcess.Pid)
+				e.manualProcess = nil
+				return e.Cfg.CheckInterval, nil
+			}
+		}
+
+		Log(e.Cfg.DataDir, fmt.Sprintf("Waiting for login in open browser... (next check in %d seconds)", int(e.Cfg.ManualAttentionInterval.Seconds())))
+		e.emitStatus("error")
+		return e.Cfg.ManualAttentionInterval, nil
+	}
+
+	// Manual process was closed or not running
+	e.manualProcess = nil
+
 	e.emitStatus("run")
 	Log(e.Cfg.DataDir, fmt.Sprintf("Starting attendance check for %s", LocalDateKey(time.Now())))
 
@@ -133,11 +174,9 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		return e.Cfg.CheckInterval, err
 	}
 
-	profileDir := e.Driver.GetDebugProfileDir(e.Cfg.BaseDir)
-	_ = os.MkdirAll(profileDir, 0755)
-
-	// Clean up any stale browser on port
+	// Clean up any stale browser on port and release profile locks
 	_ = e.Driver.StopAttendanceProcesses(profileDir, e.Cfg.DebugPort)
+	cleanProfileLocks(profileDir)
 
 	args := []string{
 		fmt.Sprintf("--remote-debugging-port=%d", e.Cfg.DebugPort),
@@ -180,7 +219,6 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 	cdpCtx, cancelCDP := context.WithTimeout(ctx, e.Cfg.CDPConnectTimeout)
 	defer cancelCDP()
 
-	// Wait for CDP port
 	var cdp *CDPClient
 	deadline := time.Now().Add(e.Cfg.CDPConnectTimeout)
 	for time.Now().Before(deadline) {
@@ -215,7 +253,9 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 
 	case ResultNeedsAttention:
 		e.emitStatus("error")
+		// Stop the headless browser and clean locks so the GUI browser can acquire the profile
 		_ = e.Driver.StopAttendanceProcesses(profileDir, e.Cfg.DebugPort)
+		cleanProfileLocks(profileDir)
 
 		Log(e.Cfg.DataDir, "Clock-in needs manual attention; opening browser window...")
 
@@ -223,17 +263,20 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		guiBrowser, err := e.Driver.FindGUIBrowser(e.Cfg)
 		if err == nil {
 			manualArgs := []string{
+				fmt.Sprintf("--remote-debugging-port=%d", e.Cfg.DebugPort),
+				fmt.Sprintf("--remote-debugging-address=%s", e.Cfg.DebugHost),
 				fmt.Sprintf("--user-data-dir=%s", profileDir),
 				fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
 				"--new-window",
-				"--disable-background-mode",
 				"--no-first-run",
 				"--no-default-browser-check",
 				e.Cfg.AttendanceURL,
 			}
 			Log(e.Cfg.DataDir, fmt.Sprintf("Launching GUI browser for login (%s) with shared profile: %s", guiBrowser, profileDir))
-			if _, err := e.Driver.StartProcess(guiBrowser, manualArgs, true); err == nil {
+			handle, err := e.Driver.StartProcess(guiBrowser, manualArgs, true)
+			if err == nil {
 				launched = true
+				e.manualProcess = handle
 				time.Sleep(1 * time.Second)
 				_ = e.Driver.FocusBrowser()
 			} else {
