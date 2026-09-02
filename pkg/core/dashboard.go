@@ -54,7 +54,7 @@ const webDashboardHTML = `<!DOCTYPE html>
 
     .logs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .logs-title { font-size: 15px; font-weight: 600; color: #cbd5e1; }
-    .logs-box { background: #070a0f; border: 1px solid #1a2434; border-radius: 10px; padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; max-height: 280px; overflow-y: auto; color: #94a3b8; white-space: pre-wrap; }
+    .logs-box { background: #070a0f; border: 1px solid #1a2434; border-radius: 10px; padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; max-height: 320px; overflow-y: auto; color: #94a3b8; white-space: pre-wrap; user-select: text; -webkit-user-select: text; cursor: text; }
   </style>
 </head>
 <body>
@@ -118,7 +118,10 @@ const webDashboardHTML = `<!DOCTYPE html>
     <div class="card">
       <div class="logs-header">
         <span class="logs-title">Live Service Logs</span>
-        <button class="secondary" style="padding: 4px 10px; font-size: 11px;" onclick="updateStatus()">Refresh</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="copyLogsBtn" class="secondary" style="padding: 4px 12px; font-size: 11px;" onclick="copyAllLogs()">📋 Copy Logs</button>
+          <button class="secondary" style="padding: 4px 10px; font-size: 11px;" onclick="updateStatus(true)">Refresh</button>
+        </div>
       </div>
       <div id="logsBox" class="logs-box">{{.Logs}}</div>
     </div>
@@ -184,7 +187,35 @@ const webDashboardHTML = `<!DOCTYPE html>
       }
     }
 
-    async function updateStatus() {
+    function isTextSelectedIn(element) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+      return element.contains(selection.anchorNode) || element.contains(selection.focusNode);
+    }
+
+    async function copyAllLogs() {
+      const btn = document.getElementById('copyLogsBtn');
+      const box = document.getElementById('logsBox');
+      const text = box.textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => { btn.textContent = '📋 Copy Logs'; }, 2000);
+      } catch (e) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => { btn.textContent = '📋 Copy Logs'; }, 2000);
+      }
+    }
+
+    async function updateStatus(force = false) {
       try {
         const res = await fetch('/api/status');
         const data = await res.json();
@@ -192,12 +223,17 @@ const webDashboardHTML = `<!DOCTYPE html>
         badge.className = 'badge ' + data.status;
         document.getElementById('statusText').textContent = data.status_text;
 
-        if (data.logs) {
+        if (data.logs !== undefined) {
           const logsBox = document.getElementById('logsBox');
-          const isScrolledToBottom = logsBox.scrollHeight - logsBox.clientHeight <= logsBox.scrollTop + 50;
-          logsBox.textContent = data.logs;
-          if (isScrolledToBottom) {
-            logsBox.scrollTop = logsBox.scrollHeight;
+          // Only update DOM if text changed AND user is not actively selecting text
+          if (logsBox.textContent !== data.logs) {
+            if (force || !isTextSelectedIn(logsBox)) {
+              const isScrolledToBottom = logsBox.scrollHeight - logsBox.clientHeight <= logsBox.scrollTop + 60;
+              logsBox.textContent = data.logs;
+              if (isScrolledToBottom) {
+                logsBox.scrollTop = logsBox.scrollHeight;
+              }
+            }
           }
         }
       } catch (e) {}
