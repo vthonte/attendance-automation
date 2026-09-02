@@ -154,6 +154,18 @@ func (d *darwinDriver) StopAttendanceProcesses(profileDir string, debugPort int)
 	return nil
 }
 
+func (d *darwinDriver) IsGUIBrowserOpen(profileDir string) bool {
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(`pgrep -f "%s" | grep -v "headless"`, strings.ReplaceAll(profileDir, `"`, `\"`)))
+	out, err := cmd.Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+func (d *darwinDriver) LaunchGUIBrowser(executable string, args []string) error {
+	cmd := exec.Command(executable, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd.Start()
+}
+
 func (d *darwinDriver) FocusBrowser() error {
 	script := `tell application "Google Chrome" to activate`
 	cmd := exec.Command("osascript", "-e", script)

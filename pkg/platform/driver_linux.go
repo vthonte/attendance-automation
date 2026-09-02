@@ -152,6 +152,18 @@ func (d *linuxDriver) FocusBrowser() error {
 	return cmd.Run()
 }
 
+func (d *linuxDriver) IsGUIBrowserOpen(profileDir string) bool {
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(`pgrep -f "%s" | grep -v "headless"`, strings.ReplaceAll(profileDir, `"`, `\"`)))
+	out, err := cmd.Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+func (d *linuxDriver) LaunchGUIBrowser(executable string, args []string) error {
+	cmd := exec.Command(executable, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd.Start()
+}
+
 func (d *linuxDriver) IsProcessRunning(pid int) bool {
 	process, err := os.FindProcess(pid)
 	if err != nil {

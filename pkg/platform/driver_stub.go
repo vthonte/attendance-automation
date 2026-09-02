@@ -55,6 +55,15 @@ func (d *stubDriver) StopAttendanceProcesses(profileDir string, debugPort int) e
 	return nil
 }
 
+func (d *stubDriver) IsGUIBrowserOpen(profileDir string) bool {
+	return false
+}
+
+func (d *stubDriver) LaunchGUIBrowser(executable string, args []string) error {
+	cmd := exec.Command(executable, args...)
+	return cmd.Start()
+}
+
 func (d *stubDriver) FocusBrowser() error {
 	return nil
 }

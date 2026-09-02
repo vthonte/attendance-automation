@@ -18,6 +18,8 @@ type PlatformDriver interface {
 	StopAttendanceProcesses(profileDir string, debugPort int) error
 	FocusBrowser() error
 	IsProcessRunning(pid int) bool
+	IsGUIBrowserOpen(profileDir string) bool
+	LaunchGUIBrowser(executable string, args []string) error
 	KillProcess(pid int) error
 	ShowToast(ctx context.Context, cfg *Config, events <-chan StatusEvent)
 	SendNotification(title, message string) error

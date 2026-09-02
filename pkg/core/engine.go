@@ -11,11 +11,10 @@ import (
 )
 
 type Engine struct {
-	Cfg           *Config
-	Driver        PlatformDriver
-	EventBus      *EventBus
-	triggerChan   chan struct{}
-	manualProcess *ProcessHandle
+	Cfg         *Config
+	Driver      PlatformDriver
+	EventBus    *EventBus
+	triggerChan chan struct{}
 }
 
 func NewEngine(cfg *Config, driver PlatformDriver) *Engine {
@@ -135,34 +134,12 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 	profileDir := e.Driver.GetDebugProfileDir(e.Cfg.BaseDir)
 	_ = os.MkdirAll(profileDir, 0755)
 
-	// If a manual login browser was opened, check if it is still running
-	if e.manualProcess != nil && e.Driver.IsProcessRunning(e.manualProcess.Pid) {
-		Log(e.Cfg.DataDir, fmt.Sprintf("Manual login browser is currently open (PID %d). Inspecting session...", e.manualProcess.Pid))
-
-		// Try to connect via CDP on debug port to see if user logged in
-		cdpCtx, cancelCDP := context.WithTimeout(ctx, 4*time.Second)
-		client, err := ConnectCDP(cdpCtx, e.Cfg.DebugHost, e.Cfg.DebugPort)
-		cancelCDP()
-		if err == nil {
-			defer client.Close()
-			res, err := PerformKekaCheckAndClockIn(ctx, client, e.Cfg)
-			if err == nil && (res == ResultAlreadyClockedIn || res == ResultClockedIn) {
-				_ = MarkLoggedToday(e.Cfg.DataDir)
-				e.emitStatus("in")
-				_ = e.Driver.SendNotification("Attendance Automation", "Successfully clocked in for today!")
-				_ = e.Driver.KillProcess(e.manualProcess.Pid)
-				e.manualProcess = nil
-				return e.Cfg.CheckInterval, nil
-			}
-		}
-
-		Log(e.Cfg.DataDir, fmt.Sprintf("Waiting for login in open browser... (next check in %d seconds)", int(e.Cfg.ManualAttentionInterval.Seconds())))
+	// If a manual login browser is currently open, do not kill it and do not spawn duplicate windows
+	if e.Driver.IsGUIBrowserOpen(profileDir) {
+		Log(e.Cfg.DataDir, "Manual login browser is currently open on desktop. Waiting for login to complete...")
 		e.emitStatus("error")
 		return e.Cfg.ManualAttentionInterval, nil
 	}
-
-	// Manual process was closed or not running
-	e.manualProcess = nil
 
 	e.emitStatus("run")
 	Log(e.Cfg.DataDir, fmt.Sprintf("Starting attendance check for %s", LocalDateKey(time.Now())))
@@ -264,8 +241,6 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		guiBrowser, err := e.Driver.FindGUIBrowser(e.Cfg)
 		if err == nil {
 			manualArgs := []string{
-				fmt.Sprintf("--remote-debugging-port=%d", e.Cfg.DebugPort),
-				fmt.Sprintf("--remote-debugging-address=%s", e.Cfg.DebugHost),
 				fmt.Sprintf("--user-data-dir=%s", profileDir),
 				fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
 				"--new-window",
@@ -274,10 +249,8 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 				e.Cfg.AttendanceURL,
 			}
 			Log(e.Cfg.DataDir, fmt.Sprintf("Launching GUI browser for login (%s) with shared profile: %s", guiBrowser, profileDir))
-			handle, err := e.Driver.StartProcess(guiBrowser, manualArgs, true)
-			if err == nil {
+			if err := e.Driver.LaunchGUIBrowser(guiBrowser, manualArgs); err == nil {
 				launched = true
-				e.manualProcess = handle
 				time.Sleep(500 * time.Millisecond)
 				_ = e.Driver.FocusBrowser()
 			} else {

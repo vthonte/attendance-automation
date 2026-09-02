@@ -182,11 +182,35 @@ func (d *windowsDriver) StopAttendanceProcesses(profileDir string, debugPort int
 	cmd1.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd1.Run()
 
-	// Kill any browser process currently holding the debug port
-	cmd2 := exec.Command("cmd.exe", "/c", fmt.Sprintf(`for /f "tokens=5" %%%%a in ('netstat -aon ^| findstr ":%d " ^| findstr "LISTENING"') do taskkill /F /PID %%%%a /T 2>nul`, debugPort))
+	// Kill any browser process holding the debug port
+	cmd2 := exec.Command("cmd.exe", "/c", fmt.Sprintf(`for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":%d " ^| findstr "LISTENING"') do taskkill /F /PID %%a /T 2>nul`, debugPort))
 	cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd2.Run()
+
+	// Kill any lingering headless Chrome or Edge on debug profile
+	cmd3 := exec.Command("cmd.exe", "/c", `wmic process where "name='chrome.exe' and commandline like '%--headless%'" call terminate 2>nul & wmic process where "name='msedge.exe' and commandline like '%--headless%'" call terminate 2>nul`)
+	cmd3.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd3.Run()
+
 	return nil
+}
+
+func (d *windowsDriver) IsGUIBrowserOpen(profileDir string) bool {
+	cmd := exec.Command("cmd.exe", "/c", `wmic process where "name='chrome.exe' or name='msedge.exe'" get commandline 2>nul | findstr /I "ChromeDebug"`)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+func (d *windowsDriver) LaunchGUIBrowser(executable string, args []string) error {
+	var quotedArgs []string
+	for _, a := range args {
+		quotedArgs = append(quotedArgs, fmt.Sprintf(`"%s"`, a))
+	}
+	startCmd := fmt.Sprintf(`start "" "%s" %s`, executable, strings.Join(quotedArgs, " "))
+	cmd := exec.Command("cmd.exe", "/c", startCmd)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Start()
 }
 
 func (d *windowsDriver) FocusBrowser() error {
