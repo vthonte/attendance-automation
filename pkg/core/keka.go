@@ -43,19 +43,29 @@ const kekaInspectorScript = `
     return null;
   }
 
+  const currentHref = window.location.href;
+
   // 1. Check if user is on a login / authentication page
-  const isLoginPage = window.location.href.includes('/login') || 
-                      window.location.href.includes('login.microsoftonline.com') ||
-                      window.location.href.includes('accounts.google.com') ||
+  const isLoginPage = currentHref.includes('/login') || 
+                      currentHref.includes('login.microsoftonline.com') ||
+                      currentHref.includes('accounts.google.com') ||
+                      currentHref.includes('auth0.com') ||
+                      currentHref.includes('okta.com') ||
                       document.querySelector('input[type="password"]') !== null ||
                       findByText('^(?:Sign\\s*in|Log\\s*in|Continue with)$', 'button, a, h1, h2');
   if (isLoginPage) {
     return JSON.stringify({ state: 'needs_login', message: 'User is on login page' });
   }
 
-  // 2. Ensure we are on the attendance logs page
-  if (window.location.hash && !window.location.hash.includes('/me/attendance')) {
-    window.location.hash = '#/me/attendance/logs';
+  // 2. If authenticated but not on attendance logs page, redirect to logs page
+  const attendanceUrl = '%s';
+  if (!currentHref.includes('/me/attendance/logs')) {
+    if (window.location.hostname.includes('keka.com') && window.location.hash) {
+      window.location.hash = '#/me/attendance/logs';
+    } else {
+      window.location.href = attendanceUrl;
+    }
+    return JSON.stringify({ state: 'redirecting', message: 'Redirecting to attendance logs page' });
   }
 
   // 3. Check if already clocked out / in
@@ -209,7 +219,7 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 		default:
 		}
 
-		script := fmt.Sprintf(kekaInspectorScript, string(cfg.ClockInMode))
+		script := fmt.Sprintf(kekaInspectorScript, cfg.AttendanceURL, string(cfg.ClockInMode))
 		val, err := cdp.Evaluate(ctx, script)
 		if err != nil {
 			time.Sleep(1 * time.Second)
@@ -232,6 +242,11 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 		case "already_clocked_in":
 			Log(cfg.DataDir, "Already clocked in (detected clock-out control)")
 			return ResultAlreadyClockedIn, nil
+
+		case "redirecting":
+			Log(cfg.DataDir, "User logged in! Redirecting browser to attendance logs page...")
+			time.Sleep(2 * time.Second)
+			continue
 
 		case "clock_in_found":
 			Log(cfg.DataDir, fmt.Sprintf("Found %s control (mode: %s). Attempting clock-in...", res.Button, cfg.ClockInMode))

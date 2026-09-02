@@ -134,9 +134,25 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 	profileDir := e.Driver.GetDebugProfileDir(e.Cfg.BaseDir)
 	_ = os.MkdirAll(profileDir, 0755)
 
-	// If a manual login browser is currently open, do not kill it and do not spawn duplicate windows
+	// If a manual login browser is currently open, inspect if user completed login
 	if e.Driver.IsGUIBrowserOpen(profileDir) {
-		Log(e.Cfg.DataDir, "Manual login browser is currently open on desktop. Waiting for login to complete...")
+		Log(e.Cfg.DataDir, "Manual login browser is open. Inspecting session for login completion...")
+
+		cdpCtx, cancelCDP := context.WithTimeout(ctx, 4*time.Second)
+		client, err := ConnectCDP(cdpCtx, e.Cfg.DebugHost, e.Cfg.DebugPort)
+		cancelCDP()
+		if err == nil {
+			defer client.Close()
+			res, err := PerformKekaCheckAndClockIn(ctx, client, e.Cfg)
+			if err == nil && (res == ResultAlreadyClockedIn || res == ResultClockedIn) {
+				_ = MarkLoggedToday(e.Cfg.DataDir)
+				e.emitStatus("in")
+				_ = e.Driver.SendNotification("Attendance Automation", "Successfully clocked in for today!")
+				return e.Cfg.CheckInterval, nil
+			}
+		}
+
+		Log(e.Cfg.DataDir, fmt.Sprintf("Waiting for login in open browser... (next check in %d seconds)", int(e.Cfg.ManualAttentionInterval.Seconds())))
 		e.emitStatus("error")
 		return e.Cfg.ManualAttentionInterval, nil
 	}
