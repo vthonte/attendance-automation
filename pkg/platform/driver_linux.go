@@ -141,7 +141,7 @@ func (d *linuxDriver) StartProcess(executable string, args []string, visible boo
 
 func (d *linuxDriver) StopAttendanceProcesses(profileDir string, debugPort int) error {
 	currPid := os.Getpid()
-	shCmd := fmt.Sprintf(`pgrep -f "attendance" | grep -v "^%d$" | xargs -r kill -9 2>/dev/null || true; pkill -f "%s" 2>/dev/null || true`, currPid, strings.ReplaceAll(profileDir, `"`, `\"`))
+	shCmd := fmt.Sprintf(`pgrep -f "attendance" | grep -v "^%d$" | xargs -r kill -9 2>/dev/null || true; fuser -k %d/tcp 2>/dev/null || true`, currPid, debugPort)
 	cmd := exec.Command("sh", "-c", shCmd)
 	_ = cmd.Run()
 	return nil

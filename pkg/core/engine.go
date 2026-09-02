@@ -256,6 +256,7 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		// Stop the headless browser and clean locks so the GUI browser can acquire the profile
 		_ = e.Driver.StopAttendanceProcesses(profileDir, e.Cfg.DebugPort)
 		cleanProfileLocks(profileDir)
+		time.Sleep(300 * time.Millisecond)
 
 		Log(e.Cfg.DataDir, "Clock-in needs manual attention; opening browser window...")
 
@@ -277,7 +278,7 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 			if err == nil {
 				launched = true
 				e.manualProcess = handle
-				time.Sleep(1 * time.Second)
+				time.Sleep(500 * time.Millisecond)
 				_ = e.Driver.FocusBrowser()
 			} else {
 				Log(e.Cfg.DataDir, fmt.Sprintf("GUI browser launch error: %v", err))

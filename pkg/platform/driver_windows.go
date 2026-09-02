@@ -5,7 +5,6 @@ package platform
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,14 +182,10 @@ func (d *windowsDriver) StopAttendanceProcesses(profileDir string, debugPort int
 	cmd1.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd1.Run()
 
-	// Fast Go socket check: only kill Chrome if the debug port is actually listening
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", debugPort), 10*time.Millisecond)
-	if err == nil {
-		_ = conn.Close()
-		cmd2 := exec.Command("cmd.exe", "/c", "taskkill /F /IM chrome.exe /FI \"WINDOWTITLE eq *ChromeDebug*\" 2>nul & taskkill /F /IM msedge.exe /FI \"WINDOWTITLE eq *ChromeDebug*\" 2>nul")
-		cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		_ = cmd2.Run()
-	}
+	// Kill any browser process currently holding the debug port
+	cmd2 := exec.Command("cmd.exe", "/c", fmt.Sprintf(`for /f "tokens=5" %%%%a in ('netstat -aon ^| findstr ":%d " ^| findstr "LISTENING"') do taskkill /F /PID %%%%a /T 2>nul`, debugPort))
+	cmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd2.Run()
 	return nil
 }
 
