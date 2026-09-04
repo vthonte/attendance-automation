@@ -89,6 +89,10 @@ const webDashboardHTML = `<!DOCTYPE html>
           <div class="info-value">{{.CheckInterval}}</div>
         </div>
         <div class="info-item">
+          <div class="info-label">Pass Location</div>
+          <div class="info-value">{{if .PassLocation}}Yes (Confirm){{else}}No (Cancel){{end}}</div>
+        </div>
+        <div class="info-item">
           <div class="info-label">Quiet Window</div>
           <div class="info-value">{{.SkipFrom}} - {{.SkipUntil}}</div>
         </div>
@@ -255,6 +259,7 @@ type dashboardData struct {
 	CompanyName   string
 	ClockInMode   string
 	BarHeight     int
+	PassLocation  bool
 	SkipFrom      string
 	SkipUntil     string
 	CheckInterval string
@@ -320,6 +325,7 @@ func StartWebDashboard(ctx context.Context, engine *Engine, port int) {
 			CompanyName:   cfg.CompanyName,
 			ClockInMode:   string(cfg.ClockInMode),
 			BarHeight:     barH,
+			PassLocation:  cfg.PassLocation,
 			SkipFrom:      cfg.SkipCheckFrom,
 			SkipUntil:     cfg.SkipCheckUntil,
 			CheckInterval: fmt.Sprintf("%d seconds", int(cfg.CheckInterval.Seconds())),

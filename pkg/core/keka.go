@@ -151,6 +151,7 @@ const kekaClockInScript = `
     return new Promise(r => setTimeout(r, ms));
   }
 
+  const passLocation = %t;
   const mode = '%s';
   const webIn = findActionLink('Web\\s*Clock\\s*-?\\s*In');
   const remoteIn = findActionLink('Remote\\s*Clock\\s*-?\\s*In');
@@ -168,8 +169,9 @@ const kekaClockInScript = `
   // Click initial clock-in link/button with full event sequence
   clickElement(targetBtn);
 
-  // Poll for modal / submit button and verify clock-out transition up to 25 seconds
+  // Poll for location modal / submit button and verify clock-out transition up to 25 seconds
   const start = Date.now();
+  let locationHandled = false;
   let submitClicked = false;
 
   while (Date.now() - start < 25000) {
@@ -183,7 +185,26 @@ const kekaClockInScript = `
       return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
     }
 
-    // Check for submit button (matching no-build: button.btn-primary.btn-sm)
+    // 1. If PASS_LOCATION is false, dismiss location prompt by clicking Cancel
+    if (!passLocation && !locationHandled) {
+      const modal = document.querySelector('.modal.show, .modal, modal-container, bs-modal-container, [role="dialog"], ngb-modal-window');
+      const isLocationModal = modal && isVisible(modal) && /location/i.test(modal.innerText || modal.textContent || '');
+
+      const cancelButtons = Array.from((modal || document).querySelectorAll('button, a.btn, [role="button"]'));
+      const cancelBtn = cancelButtons.find(b =>
+        isVisible(b) &&
+        /^(?:Cancel|Close|Dismiss|Skip|No|Don'?t\s*Allow|Block)$/i.test((b.innerText || b.textContent || '').trim())
+      );
+
+      if ((isLocationModal || modal) && cancelBtn) {
+        locationHandled = true;
+        clickElement(cancelBtn);
+        await sleep(1500);
+        continue;
+      }
+    }
+
+    // 2. Click Confirm / Submit button (matching no-build: button.btn-primary.btn-sm)
     if (!submitClicked) {
       const submitCandidates = Array.from(document.querySelectorAll('button.btn-primary.btn-sm, button.btn-primary, [type="submit"], .modal button.btn-primary, ngb-modal-window button.btn-primary, .modal button'));
       const visibleSubmit = submitCandidates.find(b =>
@@ -218,9 +239,13 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 		cleanOrigin = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	}
 
-	Log(cfg.DataDir, fmt.Sprintf("Granting live geolocation permissions for %s...", cleanOrigin))
-	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
-	_ = cdp.ClearGeolocationOverride(ctx)
+	if !cfg.PassLocation {
+		Log(cfg.DataDir, "Location sharing is configured OFF (PASS_LOCATION=false). Will click Cancel on location prompts.")
+	} else {
+		Log(cfg.DataDir, fmt.Sprintf("Granting live geolocation permissions for %s...", cleanOrigin))
+		_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
+		_ = cdp.ClearGeolocationOverride(ctx)
+	}
 
 	// Navigate with retry
 	Log(cfg.DataDir, fmt.Sprintf("Navigating to attendance page: %s", cfg.AttendanceURL))
@@ -228,8 +253,10 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 		return ResultRetryLater, fmt.Errorf("navigation failed: %w", err)
 	}
 
-	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
-	_ = cdp.ClearGeolocationOverride(ctx)
+	if cfg.PassLocation {
+		_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
+		_ = cdp.ClearGeolocationOverride(ctx)
+	}
 
 	Log(cfg.DataDir, "Attendance page loaded. Inspecting controls...")
 
@@ -271,8 +298,8 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 			continue
 
 		case "clock_in_found":
-			Log(cfg.DataDir, fmt.Sprintf("Found %s control (mode: %s). Attempting clock-in...", res.Button, cfg.ClockInMode))
-			clickScript := fmt.Sprintf(kekaClockInScript, string(cfg.ClockInMode))
+			Log(cfg.DataDir, fmt.Sprintf("Found %s control (mode: %s, pass_location: %t). Attempting clock-in...", res.Button, cfg.ClockInMode, cfg.PassLocation))
+			clickScript := fmt.Sprintf(kekaClockInScript, cfg.PassLocation, string(cfg.ClockInMode))
 			clickVal, err := cdp.Evaluate(ctx, clickScript)
 			if err != nil {
 				return ResultNeedsAttention, fmt.Errorf("failed executing clock-in click: %w", err)

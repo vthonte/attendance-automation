@@ -44,6 +44,7 @@ type Config struct {
 	DisableChromeBackgroundServices bool          `json:"disable_chrome_background_services"`
 	DisableAllUI                    bool          `json:"disable_all_ui"`
 	ChromeVisible                   bool          `json:"chrome_visible"`
+	PassLocation                    bool          `json:"pass_location"`
 	StartWithWindows                bool          `json:"start_with_windows"`
 	StartupShortcutName             string        `json:"startup_shortcut_name"`
 }
@@ -215,6 +216,7 @@ func LoadConfig() (*Config, error) {
 		DisableChromeBackgroundServices: parseBool(values["DISABLE_CHROME_BACKGROUND_SERVICES"], true),
 		DisableAllUI:                    parseBool(values["DISABLE_ALL_UI"], false),
 		ChromeVisible:                   parseBool(values["CHROME_VISIBLE"], false),
+		PassLocation:                    parseBool(values["PASS_LOCATION"], parseBool(values["ALLOW_LOCATION"], parseBool(values["ENABLE_LOCATION"], true))),
 		StartWithWindows:                parseBool(values["START_WITH_WINDOWS"], true),
 		StartupShortcutName:             shortcutName,
 	}
@@ -241,6 +243,8 @@ START_WITH_WINDOWS=true
 STARTUP_SHORTCUT_NAME=Attendance Automation
 SHOW_TOAST_UI=true
 SHOW_LOGGED_DATE=true
+# Set PASS_LOCATION=false to click Cancel instead of Confirm on the location screen
+PASS_LOCATION=true
 # Thickness of the status line at the very top of screen in pixels (e.g. 1, 2, 3)
 BAR_HEIGHT=2
 TOAST_HEIGHT=32
