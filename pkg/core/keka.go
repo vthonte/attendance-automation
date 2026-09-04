@@ -99,12 +99,15 @@ const kekaInspectorScript = `
   }
 
   // 4. PRIORITY 2: ONLY IF NO CLOCK-IN BUTTON IS FOUND, CHECK FOR CLOCK-OUT
-  // (In Keka, the action widget button turns into "Web Clock-Out" once successfully clocked in)
+  // When clocked in, Keka displays a red button:
+  // <button class="btn btn-danger mb-8">Web Clock-out</button> or <button class="btn btn-danger mb-8">Remote Clock-out</button>
+  const dangerBtn = document.querySelector('button.btn-danger');
+  const hasDangerClockOut = dangerBtn && isVisible(dangerBtn) && /Clock\s*-?\s*out/i.test((dangerBtn.innerText || dangerBtn.textContent || '').trim());
   const webOut = findActionLink('Web\\s*Clock\\s*-?\\s*Out');
   const remoteOut = findActionLink('Remote\\s*Clock\\s*-?\\s*Out');
   const genericOut = findActionLink('^Clock\\s*-?\\s*Out$');
 
-  if (webOut || remoteOut || genericOut) {
+  if (hasDangerClockOut || webOut || remoteOut || genericOut) {
     return JSON.stringify({ state: 'already_clocked_in', message: 'Clock-out button is present in action widget' });
   }
 
@@ -191,8 +194,10 @@ const kekaClockInScript = `
 
   // 2. Verify clock-in outcome
   await sleep(1000);
+  const dangerBtnNow = document.querySelector('button.btn-danger');
+  const hasDangerNow = dangerBtnNow && isVisible(dangerBtnNow) && /Clock\s*-?\s*out/i.test((dangerBtnNow.innerText || dangerBtnNow.textContent || '').trim());
   const clockOutNow = findActionLink('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
-  if (clockOutNow) {
+  if (hasDangerNow || clockOutNow) {
     return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
 
