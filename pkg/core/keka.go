@@ -119,25 +119,40 @@ const kekaInspectorScript = `
 const kekaGeolocationOverrideScript = `
 (() => {
   try {
+    const mockPos = {
+      coords: {
+        latitude: 12.9716,
+        longitude: 77.5946,
+        accuracy: 25,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null
+      },
+      timestamp: Date.now()
+    };
+
     if (navigator.geolocation) {
-      const mockPos = {
-        coords: {
-          latitude: 12.9716,
-          longitude: 77.5946,
-          accuracy: 25,
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null
-        },
-        timestamp: Date.now()
-      };
       navigator.geolocation.getCurrentPosition = function(success, error, options) {
         if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
       };
       navigator.geolocation.watchPosition = function(success, error, options) {
         if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
         return 1;
+      };
+    }
+
+    if (navigator.permissions && navigator.permissions.query) {
+      const origQuery = navigator.permissions.query.bind(navigator.permissions);
+      navigator.permissions.query = function(params) {
+        if (params && params.name === 'geolocation') {
+          return Promise.resolve({
+            state: 'granted',
+            name: 'geolocation',
+            onchange: null
+          });
+        }
+        return origQuery(params);
       };
     }
   } catch(e) {}
@@ -179,27 +194,42 @@ const kekaClockInScript = `
     return new Promise(r => setTimeout(r, ms));
   }
 
-  // 1. Ensure Geolocation mock is active in JS context
+  // 1. Ensure Geolocation and permissions query mocks are active in JS context
   try {
+    const mockPos = {
+      coords: {
+        latitude: 12.9716,
+        longitude: 77.5946,
+        accuracy: 25,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null
+      },
+      timestamp: Date.now()
+    };
+
     if (navigator.geolocation) {
-      const mockPos = {
-        coords: {
-          latitude: 12.9716,
-          longitude: 77.5946,
-          accuracy: 25,
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null
-        },
-        timestamp: Date.now()
-      };
       navigator.geolocation.getCurrentPosition = function(success) {
         if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
       };
       navigator.geolocation.watchPosition = function(success) {
         if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
         return 1;
+      };
+    }
+
+    if (navigator.permissions && navigator.permissions.query) {
+      const origQuery = navigator.permissions.query.bind(navigator.permissions);
+      navigator.permissions.query = function(params) {
+        if (params && params.name === 'geolocation') {
+          return Promise.resolve({
+            state: 'granted',
+            name: 'geolocation',
+            onchange: null
+          });
+        }
+        return origQuery(params);
       };
     }
   } catch(e) {}
@@ -221,11 +251,11 @@ const kekaClockInScript = `
   // Click initial clock-in link/button with full event sequence
   clickElement(targetBtn);
 
-  // 2. Poll for modal and verify clock-out transition up to 15 seconds
+  // 2. Poll for modal / submit button and verify clock-out transition up to 20 seconds
   const start = Date.now();
-  let modalClicked = false;
+  let submitClicked = false;
 
-  while (Date.now() - start < 15000) {
+  while (Date.now() - start < 20000) {
     await sleep(500);
 
     // Check if clocked out button (btn-danger) has appeared!
@@ -236,25 +266,18 @@ const kekaClockInScript = `
       return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
     }
 
-    // Check for modal dialog
-    const modal = document.querySelector('.modal.show, .modal, modal-container, bs-modal-container, [role="dialog"], ngb-modal-window');
-    if (modal && isVisible(modal)) {
-      const modalButtons = Array.from(modal.querySelectorAll('button, input[type="submit"], a.btn'));
-      const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test((b.innerText || b.textContent || '').trim()));
-
-      let confirmBtn = actionButtons.find(b =>
-        b.classList.contains('btn-primary') ||
-        b.getAttribute('type') === 'submit' ||
-        /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test((b.innerText || b.textContent || '').trim())
+    // Check for submit button (matching no-build: button.btn-primary.btn-sm)
+    if (!submitClicked) {
+      const submitCandidates = Array.from(document.querySelectorAll('button.btn-primary.btn-sm, button.btn-primary, [type="submit"], .modal button.btn-primary, ngb-modal-window button.btn-primary, .modal button'));
+      const visibleSubmit = submitCandidates.find(b =>
+        isVisible(b) &&
+        !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test((b.innerText || b.textContent || '').trim()) &&
+        (b.classList.contains('btn-primary') || b.getAttribute('type') === 'submit' || /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test((b.innerText || b.textContent || '').trim()))
       );
 
-      if (!confirmBtn && actionButtons.length > 0) {
-        confirmBtn = actionButtons[actionButtons.length - 1];
-      }
-
-      if (confirmBtn && !modalClicked) {
-        modalClicked = true;
-        clickElement(confirmBtn);
+      if (visibleSubmit) {
+        submitClicked = true;
+        clickElement(visibleSubmit);
         await sleep(1500);
       }
     }
@@ -267,7 +290,7 @@ const kekaClockInScript = `
     return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
 
-  return JSON.stringify({ state: 'error', message: 'Clock-out button did not appear within 15 seconds after clicking clock-in' });
+  return JSON.stringify({ state: 'error', message: 'Clock-out button did not appear within 20 seconds after clicking clock-in' });
 })()
 `
 
