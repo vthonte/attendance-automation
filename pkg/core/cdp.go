@@ -204,13 +204,8 @@ func (c *CDPClient) GrantPermissions(ctx context.Context, origin string, permiss
 	return err
 }
 
-func (c *CDPClient) SetGeolocationOverride(ctx context.Context, lat, lon, accuracy float64) error {
-	params := map[string]any{
-		"latitude":  lat,
-		"longitude": lon,
-		"accuracy":  accuracy,
-	}
-	_, err := c.Call(ctx, "Emulation.setGeolocationOverride", params)
+func (c *CDPClient) ClearGeolocationOverride(ctx context.Context) error {
+	_, err := c.Call(ctx, "Emulation.clearGeolocationOverride", map[string]any{})
 	return err
 }
 

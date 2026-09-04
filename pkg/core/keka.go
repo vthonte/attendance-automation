@@ -116,49 +116,6 @@ const kekaInspectorScript = `
 })()
 `
 
-const kekaGeolocationOverrideScript = `
-(() => {
-  try {
-    const mockPos = {
-      coords: {
-        latitude: 12.9716,
-        longitude: 77.5946,
-        accuracy: 25,
-        altitude: null,
-        altitudeAccuracy: null,
-        heading: null,
-        speed: null
-      },
-      timestamp: Date.now()
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition = function(success, error, options) {
-        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
-      };
-      navigator.geolocation.watchPosition = function(success, error, options) {
-        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
-        return 1;
-      };
-    }
-
-    if (navigator.permissions && navigator.permissions.query) {
-      const origQuery = navigator.permissions.query.bind(navigator.permissions);
-      navigator.permissions.query = function(params) {
-        if (params && params.name === 'geolocation') {
-          return Promise.resolve({
-            state: 'granted',
-            name: 'geolocation',
-            onchange: null
-          });
-        }
-        return origQuery(params);
-      };
-    }
-  } catch(e) {}
-})()
-`
-
 const kekaClockInScript = `
 (async () => {
   function isVisible(el) {
@@ -194,46 +151,6 @@ const kekaClockInScript = `
     return new Promise(r => setTimeout(r, ms));
   }
 
-  // 1. Ensure Geolocation and permissions query mocks are active in JS context
-  try {
-    const mockPos = {
-      coords: {
-        latitude: 12.9716,
-        longitude: 77.5946,
-        accuracy: 25,
-        altitude: null,
-        altitudeAccuracy: null,
-        heading: null,
-        speed: null
-      },
-      timestamp: Date.now()
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition = function(success) {
-        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
-      };
-      navigator.geolocation.watchPosition = function(success) {
-        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
-        return 1;
-      };
-    }
-
-    if (navigator.permissions && navigator.permissions.query) {
-      const origQuery = navigator.permissions.query.bind(navigator.permissions);
-      navigator.permissions.query = function(params) {
-        if (params && params.name === 'geolocation') {
-          return Promise.resolve({
-            state: 'granted',
-            name: 'geolocation',
-            onchange: null
-          });
-        }
-        return origQuery(params);
-      };
-    }
-  } catch(e) {}
-
   const mode = '%s';
   const webIn = findActionLink('Web\\s*Clock\\s*-?\\s*In');
   const remoteIn = findActionLink('Remote\\s*Clock\\s*-?\\s*In');
@@ -251,11 +168,11 @@ const kekaClockInScript = `
   // Click initial clock-in link/button with full event sequence
   clickElement(targetBtn);
 
-  // 2. Poll for modal / submit button and verify clock-out transition up to 20 seconds
+  // Poll for modal / submit button and verify clock-out transition up to 25 seconds
   const start = Date.now();
   let submitClicked = false;
 
-  while (Date.now() - start < 20000) {
+  while (Date.now() - start < 25000) {
     await sleep(500);
 
     // Check if clocked out button (btn-danger) has appeared!
@@ -290,7 +207,7 @@ const kekaClockInScript = `
     return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
 
-  return JSON.stringify({ state: 'error', message: 'Clock-out button did not appear within 20 seconds after clicking clock-in' });
+  return JSON.stringify({ state: 'error', message: 'Clock-out button did not appear within 25 seconds after clicking clock-in' });
 })()
 `
 
@@ -301,9 +218,9 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 		cleanOrigin = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	}
 
-	Log(cfg.DataDir, fmt.Sprintf("Granting geolocation permissions for %s...", cleanOrigin))
+	Log(cfg.DataDir, fmt.Sprintf("Granting live geolocation permissions for %s...", cleanOrigin))
 	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
-	_ = cdp.SetGeolocationOverride(ctx, 12.9716, 77.5946, 25.0)
+	_ = cdp.ClearGeolocationOverride(ctx)
 
 	// Navigate with retry
 	Log(cfg.DataDir, fmt.Sprintf("Navigating to attendance page: %s", cfg.AttendanceURL))
@@ -312,8 +229,7 @@ func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config
 	}
 
 	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
-	_ = cdp.SetGeolocationOverride(ctx, 12.9716, 77.5946, 25.0)
-	_, _ = cdp.Evaluate(ctx, kekaGeolocationOverrideScript)
+	_ = cdp.ClearGeolocationOverride(ctx)
 
 	Log(cfg.DataDir, "Attendance page loaded. Inspecting controls...")
 
