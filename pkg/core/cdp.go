@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -190,11 +191,26 @@ func (c *CDPClient) Call(ctx context.Context, method string, params any) (json.R
 }
 
 func (c *CDPClient) GrantPermissions(ctx context.Context, origin string, permissions []string) error {
+	cleanOrigin := origin
+	if u, err := url.Parse(origin); err == nil && u.Scheme != "" && u.Host != "" {
+		cleanOrigin = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+	}
+
 	params := map[string]any{
-		"origin":      origin,
+		"origin":      cleanOrigin,
 		"permissions": permissions,
 	}
 	_, err := c.Call(ctx, "Browser.grantPermissions", params)
+	return err
+}
+
+func (c *CDPClient) SetGeolocationOverride(ctx context.Context, lat, lon, accuracy float64) error {
+	params := map[string]any{
+		"latitude":  lat,
+		"longitude": lon,
+		"accuracy":  accuracy,
+	}
+	_, err := c.Call(ctx, "Emulation.setGeolocationOverride", params)
 	return err
 }
 

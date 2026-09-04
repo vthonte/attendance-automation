@@ -178,6 +178,8 @@ func (e *Engine) ClockInIfNeeded(ctx context.Context) (time.Duration, error) {
 		fmt.Sprintf("--profile-directory=%s", e.Cfg.ChromeProfileDirectory),
 		"--no-first-run",
 		"--no-default-browser-check",
+		"--enable-features=Geolocation",
+		"--auto-accept-camera-and-microphone-capture",
 	}
 
 	if !e.Cfg.ChromeVisible {

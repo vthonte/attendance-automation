@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -115,6 +116,34 @@ const kekaInspectorScript = `
 })()
 `
 
+const kekaGeolocationOverrideScript = `
+(() => {
+  try {
+    if (navigator.geolocation) {
+      const mockPos = {
+        coords: {
+          latitude: 12.9716,
+          longitude: 77.5946,
+          accuracy: 25,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null
+        },
+        timestamp: Date.now()
+      };
+      navigator.geolocation.getCurrentPosition = function(success, error, options) {
+        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
+      };
+      navigator.geolocation.watchPosition = function(success, error, options) {
+        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
+        return 1;
+      };
+    }
+  } catch(e) {}
+})()
+`
+
 const kekaClockInScript = `
 (async () => {
   function isVisible(el) {
@@ -150,6 +179,31 @@ const kekaClockInScript = `
     return new Promise(r => setTimeout(r, ms));
   }
 
+  // 1. Ensure Geolocation mock is active in JS context
+  try {
+    if (navigator.geolocation) {
+      const mockPos = {
+        coords: {
+          latitude: 12.9716,
+          longitude: 77.5946,
+          accuracy: 25,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null
+        },
+        timestamp: Date.now()
+      };
+      navigator.geolocation.getCurrentPosition = function(success) {
+        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
+      };
+      navigator.geolocation.watchPosition = function(success) {
+        if (typeof success === 'function') setTimeout(() => success(mockPos), 50);
+        return 1;
+      };
+    }
+  } catch(e) {}
+
   const mode = '%s';
   const webIn = findActionLink('Web\\s*Clock\\s*-?\\s*In');
   const remoteIn = findActionLink('Remote\\s*Clock\\s*-?\\s*In');
@@ -166,64 +220,77 @@ const kekaClockInScript = `
 
   // Click initial clock-in link/button with full event sequence
   clickElement(targetBtn);
-  await sleep(1500);
 
-  // 1. Check if a confirmation modal / dialog is open
-  const modal = document.querySelector('.modal, .modal-dialog, modal-container, bs-modal-container, [role="dialog"], ngb-modal-window');
-  if (modal) {
-    const modalButtons = Array.from(modal.querySelectorAll('button, input[type="submit"], a.btn'));
-    
-    // Find action buttons (exclude Cancel, Close, Dismiss)
-    const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test((b.innerText || b.textContent || '').trim()));
+  // 2. Poll for modal and verify clock-out transition up to 15 seconds
+  const start = Date.now();
+  let modalClicked = false;
 
-    let confirmBtn = actionButtons.find(b =>
-      b.classList.contains('btn-primary') ||
-      b.getAttribute('type') === 'submit' ||
-      /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test((b.innerText || b.textContent || '').trim())
-    );
+  while (Date.now() - start < 15000) {
+    await sleep(500);
 
-    if (!confirmBtn && actionButtons.length > 0) {
-      confirmBtn = actionButtons[actionButtons.length - 1];
+    // Check if clocked out button (btn-danger) has appeared!
+    const dangerBtn = document.querySelector('button.btn-danger');
+    const hasDanger = dangerBtn && isVisible(dangerBtn) && /Clock\s*-?\s*out/i.test((dangerBtn.innerText || dangerBtn.textContent || '').trim());
+    const clockOutLink = findActionLink('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
+    if (hasDanger || clockOutLink) {
+      return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
     }
 
-    if (confirmBtn) {
-      clickElement(confirmBtn);
-      await sleep(2500);
+    // Check for modal dialog
+    const modal = document.querySelector('.modal.show, .modal, modal-container, bs-modal-container, [role="dialog"], ngb-modal-window');
+    if (modal && isVisible(modal)) {
+      const modalButtons = Array.from(modal.querySelectorAll('button, input[type="submit"], a.btn'));
+      const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test((b.innerText || b.textContent || '').trim()));
+
+      let confirmBtn = actionButtons.find(b =>
+        b.classList.contains('btn-primary') ||
+        b.getAttribute('type') === 'submit' ||
+        /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test((b.innerText || b.textContent || '').trim())
+      );
+
+      if (!confirmBtn && actionButtons.length > 0) {
+        confirmBtn = actionButtons[actionButtons.length - 1];
+      }
+
+      if (confirmBtn && !modalClicked) {
+        modalClicked = true;
+        clickElement(confirmBtn);
+        await sleep(1500);
+      }
     }
   }
 
-  // 2. Verify clock-in outcome
-  await sleep(1000);
-  const dangerBtnNow = document.querySelector('button.btn-danger');
-  const hasDangerNow = dangerBtnNow && isVisible(dangerBtnNow) && /Clock\s*-?\s*out/i.test((dangerBtnNow.innerText || dangerBtnNow.textContent || '').trim());
-  const clockOutNow = findActionLink('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
-  if (hasDangerNow || clockOutNow) {
+  // Final check
+  const dangerBtnFinal = document.querySelector('button.btn-danger');
+  const hasDangerFinal = dangerBtnFinal && isVisible(dangerBtnFinal) && /Clock\s*-?\s*out/i.test((dangerBtnFinal.innerText || dangerBtnFinal.textContent || '').trim());
+  if (hasDangerFinal) {
     return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
 
-  // Check if modal has closed
-  const stillOpenModal = document.querySelector('.modal.show, modal-container, ngb-modal-window');
-  if (!stillOpenModal) {
-    return JSON.stringify({ state: 'success', message: 'Clock-in submitted successfully' });
-  }
-
-  const errorEl = stillOpenModal.querySelector('.text-danger, .alert-danger, .error-message, .validation-message');
-  const errorText = errorEl ? errorEl.textContent.trim() : 'Confirmation modal remained open';
-
-  return JSON.stringify({ state: 'error', message: errorText });
+  return JSON.stringify({ state: 'error', message: 'Clock-out button did not appear within 15 seconds after clicking clock-in' });
 })()
 `
 
 func PerformKekaCheckAndClockIn(ctx context.Context, cdp *CDPClient, cfg *Config) (CheckResult, error) {
-	// Grant geolocation permissions
-	Log(cfg.DataDir, "Granting permissions for attendance URL...")
-	_ = cdp.GrantPermissions(ctx, cfg.AttendanceURL, []string{"geolocation"})
+	// Parse clean origin for Browser.grantPermissions
+	cleanOrigin := cfg.AttendanceURL
+	if u, err := url.Parse(cfg.AttendanceURL); err == nil && u.Scheme != "" && u.Host != "" {
+		cleanOrigin = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+	}
+
+	Log(cfg.DataDir, fmt.Sprintf("Granting geolocation permissions for %s...", cleanOrigin))
+	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
+	_ = cdp.SetGeolocationOverride(ctx, 12.9716, 77.5946, 25.0)
 
 	// Navigate with retry
 	Log(cfg.DataDir, fmt.Sprintf("Navigating to attendance page: %s", cfg.AttendanceURL))
 	if err := cdp.Navigate(ctx, cfg.AttendanceURL); err != nil {
 		return ResultRetryLater, fmt.Errorf("navigation failed: %w", err)
 	}
+
+	_ = cdp.GrantPermissions(ctx, cleanOrigin, []string{"geolocation"})
+	_ = cdp.SetGeolocationOverride(ctx, 12.9716, 77.5946, 25.0)
+	_, _ = cdp.Evaluate(ctx, kekaGeolocationOverrideScript)
 
 	Log(cfg.DataDir, "Attendance page loaded. Inspecting controls...")
 
