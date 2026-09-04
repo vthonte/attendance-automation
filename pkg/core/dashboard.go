@@ -332,6 +332,9 @@ func StartWebDashboard(ctx context.Context, engine *Engine, port int) {
 	})
 
 	mux.HandleFunc("/api/check", func(w http.ResponseWriter, r *http.Request) {
+		Log(cfg.DataDir, "Manual attendance check triggered via Web UI; resetting cached status")
+		_ = ResetLoggedToday(cfg.DataDir)
+		_ = SetStatus(cfg.DataDir, "run")
 		engine.TriggerCheck()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{

@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -24,6 +25,7 @@ func main() {
 	platform.AttachParentConsole()
 
 	onceFlag := flag.Bool("once", false, "Run a single attendance check and exit")
+	checkFlag := flag.Bool("check", false, "Reset cached status and trigger immediate attendance check")
 	statusFlag := flag.Bool("status", false, "Show current attendance status and configuration")
 	toastFlag := flag.Bool("toast", false, "Run only the status toast overlay window")
 	stopFlag := flag.Bool("stop", false, "Stop running attendance automation processes and Chrome")
@@ -73,6 +75,21 @@ func main() {
 		}
 		fmt.Println("Done! Browser installed to:", filepath.Join(cfg.DataDir, "browser"))
 		return
+	}
+
+	// Command: --check
+	if *checkFlag {
+		fmt.Println("Resetting cached status and triggering immediate check...")
+		_ = core.ResetLoggedToday(cfg.DataDir)
+		_ = core.SetStatus(cfg.DataDir, "run")
+		if core.IsDashboardRunning(*dashboardPortFlag) {
+			_, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/api/check", *dashboardPortFlag), "application/json", nil)
+			if err == nil {
+				fmt.Println("Triggered attendance check in running daemon.")
+				return
+			}
+		}
+		*onceFlag = true
 	}
 
 	// Command: --stop
@@ -155,6 +172,7 @@ func main() {
 	// Command: --once (single check and exit)
 	if *onceFlag {
 		fmt.Println("Running single attendance check...")
+		_ = core.ResetLoggedToday(cfg.DataDir)
 		release, err := core.AcquireLock(cfg.DataDir, driver)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot run check: %v\n", err)

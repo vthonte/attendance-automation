@@ -77,6 +77,12 @@ func MarkLoggedToday(dataDir string) error {
 	return SaveStore(dataDir, st)
 }
 
+func ResetLoggedToday(dataDir string) error {
+	st := LoadStore(dataDir)
+	delete(st, LocalDateKey(time.Now()))
+	return SaveStore(dataDir, st)
+}
+
 func SetStatus(dataDir, status string) error {
 	storeMu.Lock()
 	defer storeMu.Unlock()

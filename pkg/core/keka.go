@@ -32,11 +32,14 @@ const kekaInspectorScript = `
     return rect.width > 0 && rect.height > 0;
   }
 
-  function findByText(regexStr, tagFilter = 'button, a, span, div, p, strong') {
+  function findActionLink(regexStr) {
     const regex = new RegExp(regexStr, 'i');
-    const elements = Array.from(document.querySelectorAll(tagFilter));
-    for (const el of elements) {
-      if (regex.test(el.textContent.trim()) && isVisible(el)) {
+    // Only search clickable action elements (a, button), NOT table history rows or containers
+    const candidates = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+    for (const el of candidates) {
+      if (el.closest('table, tbody, tr, .attendance-logs-table, .logs-table, .history-table')) continue;
+      const text = (el.innerText || el.textContent || '').trim();
+      if (regex.test(text) && isVisible(el) && text.length < 50) {
         return el;
       }
     }
@@ -51,8 +54,7 @@ const kekaInspectorScript = `
                       currentHref.includes('accounts.google.com') ||
                       currentHref.includes('auth0.com') ||
                       currentHref.includes('okta.com') ||
-                      document.querySelector('input[type="password"]') !== null ||
-                      findByText('^(?:Sign\\s*in|Log\\s*in|Continue with)$', 'button, a, h1, h2');
+                      document.querySelector('input[type="password"]') !== null;
   if (isLoginPage) {
     return JSON.stringify({ state: 'needs_login', message: 'User is on login page' });
   }
@@ -68,43 +70,42 @@ const kekaInspectorScript = `
     return JSON.stringify({ state: 'redirecting', message: 'Redirecting to attendance logs page' });
   }
 
-  // 3. Check if already clocked out / in
-  const clockOut = findByText('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
-  if (clockOut) {
-    return JSON.stringify({ state: 'already_clocked_in', message: 'Clock-out button is present' });
-  }
-
-  // 4. Check for clock-in buttons
-  const remoteIn = findByText('Remote\\s*Clock\\s*-?\\s*In');
-  const webIn = findByText('Web\\s*Clock\\s*-?\\s*In');
-  const genericIn = findByText('^Clock\\s*-?\\s*In$', 'button, a, span');
-
-  let targetBtn = null;
-  let btnType = '';
+  // 3. PRIORITY 1: CHECK FOR CLOCK-IN BUTTONS FIRST!
+  // If Web Clock-In or Remote Clock-In is visible, the user is NOT clocked in.
+  const webIn = findActionLink('Web\\s*Clock\\s*-?\\s*In');
+  const remoteIn = findActionLink('Remote\\s*Clock\\s*-?\\s*In');
+  const genericIn = findActionLink('^Clock\\s*-?\\s*In$');
 
   const mode = '%s'; // web, remote, auto
+  let targetBtn = null;
+  let btnType = '';
 
   if (mode === 'web') {
     if (webIn) { targetBtn = webIn; btnType = 'webClockIn'; }
     else if (genericIn) { targetBtn = genericIn; btnType = 'webClockIn'; }
+    else if (remoteIn) { targetBtn = remoteIn; btnType = 'remoteClockIn'; }
   } else if (mode === 'remote') {
     if (remoteIn) { targetBtn = remoteIn; btnType = 'remoteClockIn'; }
     else if (genericIn) { targetBtn = genericIn; btnType = 'remoteClockIn'; }
+    else if (webIn) { targetBtn = webIn; btnType = 'webClockIn'; }
   } else { // auto
     if (remoteIn) { targetBtn = remoteIn; btnType = 'remoteClockIn'; }
     else if (webIn) { targetBtn = webIn; btnType = 'webClockIn'; }
     else if (genericIn) { targetBtn = genericIn; btnType = 'genericClockIn'; }
   }
 
-  if (!targetBtn) {
-    if (remoteIn || webIn || genericIn) {
-      targetBtn = remoteIn || webIn || genericIn;
-      btnType = remoteIn ? 'remoteClockIn' : (webIn ? 'webClockIn' : 'genericClockIn');
-    }
-  }
-
   if (targetBtn) {
     return JSON.stringify({ state: 'clock_in_found', button: btnType });
+  }
+
+  // 4. PRIORITY 2: ONLY IF NO CLOCK-IN BUTTON IS FOUND, CHECK FOR CLOCK-OUT
+  // (In Keka, the action widget button turns into "Web Clock-Out" once successfully clocked in)
+  const webOut = findActionLink('Web\\s*Clock\\s*-?\\s*Out');
+  const remoteOut = findActionLink('Remote\\s*Clock\\s*-?\\s*Out');
+  const genericOut = findActionLink('^Clock\\s*-?\\s*Out$');
+
+  if (webOut || remoteOut || genericOut) {
+    return JSON.stringify({ state: 'already_clocked_in', message: 'Clock-out button is present in action widget' });
   }
 
   return JSON.stringify({ state: 'not_found', message: 'No attendance controls found' });
@@ -121,15 +122,25 @@ const kekaClockInScript = `
     return rect.width > 0 && rect.height > 0;
   }
 
-  function findByText(regexStr, tagFilter = 'button, a, span, div, p, strong') {
+  function findActionLink(regexStr) {
     const regex = new RegExp(regexStr, 'i');
-    const elements = Array.from(document.querySelectorAll(tagFilter));
-    for (const el of elements) {
-      if (regex.test(el.textContent.trim()) && isVisible(el)) {
+    const candidates = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+    for (const el of candidates) {
+      if (el.closest('table, tbody, tr, .attendance-logs-table, .logs-table, .history-table')) continue;
+      const text = (el.innerText || el.textContent || '').trim();
+      if (regex.test(text) && isVisible(el) && text.length < 50) {
         return el;
       }
     }
     return null;
+  }
+
+  function clickElement(el) {
+    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+    el.focus();
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+    el.click();
   }
 
   function sleep(ms) {
@@ -137,9 +148,9 @@ const kekaClockInScript = `
   }
 
   const mode = '%s';
-  const remoteIn = findByText('Remote\\s*Clock\\s*-?\\s*In');
-  const webIn = findByText('Web\\s*Clock\\s*-?\\s*In');
-  const genericIn = findByText('^Clock\\s*-?\\s*In$', 'button, a, span');
+  const webIn = findActionLink('Web\\s*Clock\\s*-?\\s*In');
+  const remoteIn = findActionLink('Remote\\s*Clock\\s*-?\\s*In');
+  const genericIn = findActionLink('^Clock\\s*-?\\s*In$');
 
   let targetBtn = null;
   if (mode === 'web') targetBtn = webIn || genericIn || remoteIn;
@@ -150,8 +161,8 @@ const kekaClockInScript = `
     return JSON.stringify({ state: 'error', message: 'Clock-in button vanished' });
   }
 
-  // Click initial clock-in button
-  targetBtn.click();
+  // Click initial clock-in link/button with full event sequence
+  clickElement(targetBtn);
   await sleep(1500);
 
   // 1. Check if a confirmation modal / dialog is open
@@ -160,27 +171,27 @@ const kekaClockInScript = `
     const modalButtons = Array.from(modal.querySelectorAll('button, input[type="submit"], a.btn'));
     
     // Find action buttons (exclude Cancel, Close, Dismiss)
-    const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test(b.textContent.trim()));
+    const actionButtons = modalButtons.filter(b => isVisible(b) && !/^(?:Cancel|Close|Dismiss|No|Back)$/i.test((b.innerText || b.textContent || '').trim()));
 
     let confirmBtn = actionButtons.find(b =>
       b.classList.contains('btn-primary') ||
       b.getAttribute('type') === 'submit' ||
-      /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test(b.textContent.trim())
+      /^(?:Confirm|Submit|Save|Proceed|Yes|OK|Clock\\s*-?\\s*In|Web\\s*Clock\\s*-?\\s*In|Remote\\s*Clock\\s*-?\\s*In|Punch\\s*In)/i.test((b.innerText || b.textContent || '').trim())
     );
 
     if (!confirmBtn && actionButtons.length > 0) {
-      confirmBtn = actionButtons[actionButtons.length - 1]; // usually last button is primary action
+      confirmBtn = actionButtons[actionButtons.length - 1];
     }
 
     if (confirmBtn) {
-      confirmBtn.click();
-      await sleep(2000);
+      clickElement(confirmBtn);
+      await sleep(2500);
     }
   }
 
   // 2. Verify clock-in outcome
   await sleep(1000);
-  const clockOutNow = findByText('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
+  const clockOutNow = findActionLink('(?:Remote|Web)?\\s*Clock\\s*-?\\s*Out');
   if (clockOutNow) {
     return JSON.stringify({ state: 'success', message: 'Clocked in successfully (Clock-Out is now visible)' });
   }
